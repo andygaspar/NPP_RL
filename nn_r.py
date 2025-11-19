@@ -69,6 +69,7 @@ class Agent:
         X_flat = self.make_instance_flat(instance)
         if eval:
             with torch.no_grad():
+                X_flat.requires_grad = True
                 return self.net(X_flat)
         else:
             return self.net(X_flat)
