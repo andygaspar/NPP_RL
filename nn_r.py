@@ -10,10 +10,10 @@ from Solver.solver import GlobalSolver
 
 import neptune
 
-run = neptune.init_run(
-    project="federicocamerota/npp-rl",
-    api_token="eyJhcGlfYWRkcmVzcyI6Imh0dHBzOi8vYXBwLm5lcHR1bmUuYWkiLCJhcGlfdXJsIjoiaHR0cHM6Ly9hcHAubmVwdHVuZS5haSIsImFwaV9rZXkiOiJkNDM4YTIyMS0zM2M0LTQ5YjItYjBhZi00NDNhZmFjYWZmYTMifQ==",
-)
+#run = neptune.init_run(
+#    project="federicocamerota/npp-rl",
+#    api_token="eyJhcGlfYWRkcmVzcyI6Imh0dHBzOi8vYXBwLm5lcHR1bmUuYWkiLCJhcGlfdXJsIjoiaHR0cHM6Ly9hcHAubmVwdHVuZS5haSIsImFwaV9rZXkiOiJkNDM4YTIyMS0zM2M0LTQ5YjItYjBhZi00NDNhZmFjYWZmYTMifQ==",
+#)
 
 GASPA_MAGIC_NUMBER = 100
 
