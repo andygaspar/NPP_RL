@@ -23,14 +23,17 @@ class Net(nn.Module):
         super().__init__()
         self.fc1 = nn.Linear(input_size, hidden)
         self.fc2 = nn.Linear(hidden, hidden)
+        self.fc22 = nn.Linear(hidden, hidden)
         self.fc3 = nn.Linear(hidden, hidden)
 
         self.best_fc1 = nn.Linear(n_paths, hidden)
         self.best_fc2 = nn.Linear(hidden, hidden)
+        self.best_fc22 = nn.Linear(hidden, hidden)
         self.best_fc3 = nn.Linear(hidden, hidden)
 
         self.act_fc1 = nn.Linear(2 * hidden, 2*hidden)
         self.act_fc2 = nn.Linear(2*hidden, 2*hidden)
+        self.act_fc22 = nn.Linear(2*hidden, 2*hidden)
         self.act_fc3 = nn.Linear(2*hidden, 2*n_paths)
 
         self.act = nn.LeakyReLU()
@@ -42,28 +45,35 @@ class Net(nn.Module):
         n_p = x[:, self.n_paths: self.n_paths * 2]
         x = self.act(self.fc1(x))
         x = self.act(self.fc2(x) + x)
+        x = self.act(self.fc22(x) + x)
         x = self.fc3(x) + x
 
         best_x = self.act(self.best_fc1(best_x))
         best_x = self.act(self.best_fc2(best_x) + best_x)
+        best_x = self.act(self.best_fc22(best_x) + best_x)
         best_x = self.best_fc3(best_x) + best_x
 
         act_x = torch.cat([x, best_x], dim=-1)
         act_x = self.act(self.act_fc1(act_x))
         act_x = self.act(self.act_fc2(act_x) + act_x)
+        act_x = self.act(self.act_fc22(act_x) + act_x)
         act_x = self.act_fc3(act_x)
 
         act_x = act_x.view(-1, self.n_paths, 2)
+        act_x = torch.sigmoid_(act_x)
         # Stable parameter computation with constraints
         alpha_raw = act_x[:, :, 0]
         beta_raw = act_x[:, :, 1]
 
-        # Clip raw values before softplus to prevent explosion
-        alpha_raw = torch.clip(alpha_raw, -50, 50)   # [-5, 5]
-        beta_raw = torch.clip(beta_raw, -50, 50)
-        # Apply softplus with minimum value
-        alpha = self.soft_plus(alpha_raw).view(-1, self.n_paths) + 1e-6
-        beta = self.soft_plus(beta_raw).view(-1, self.n_paths) + 1e-6
+        alpha = 10 * alpha_raw + 1e-10
+        beta = 10 * beta_raw + 1e-10
+
+        ## Clip raw values before softplus to prevent explosion
+        #alpha_raw = torch.clip(alpha_raw, -50, 50)   # [-5, 5]
+        #beta_raw = torch.clip(beta_raw, -50, 50)
+        ## Apply softplus with minimum value
+        #alpha = self.soft_plus(alpha_raw).view(-1, self.n_paths) + 1e-6
+        #beta = self.soft_plus(beta_raw).view(-1, self.n_paths) + 1e-6
         # alpha = self.soft_plus(x[:, :, :1]).view(-1, self.n_paths)
         # beta = self.soft_plus(x[:, :, 1:]).view(-1, self.n_paths)
         mm = Beta(alpha, beta)
@@ -113,6 +123,7 @@ class Agent:
     def train(self, log_action, reward, alpha, beta):
         loss = -(reward/self.best_val * log_action).mean() + 2*(torch.abs(alpha/50).sum() + torch.abs(beta/50).sum())/(alpha.shape[-1]*2)
         loss.backward()
+        torch.nn.utils.clip_grad_norm_(self.net.parameters(), 1)
         self.optimizer.step()
         return loss.item()
 
@@ -122,7 +133,7 @@ N_PATHS = 4
 SEED = 1
 HIDEEN = 64
 
-lr = 0.001
+lr = 0.000001
 wd = 0.0001
 
 torch.manual_seed(SEED)
@@ -153,10 +164,12 @@ for _ in range(100000):
         res.append([val for _ in range(N_PATHS)])
         agent.update_best_val(val, p)
     res = torch.tensor(res, dtype=torch.float32).unsqueeze(1)
-    loss = agent.train(log_prices, res, alpha, beta)
+    loss = agent.train(log_prices, res - agent.best_val, alpha, beta)
     #
     if _ % 1000 == 0:
-        print(_, "objval", res[0][0], loss, prices[0].cpu().tolist(), alpha, beta)
+        print(_, "objval", res[0][0])
+        print('alpha',alpha)
+        print('beta', beta)
         # print("Output rete (non allenata):", prices, log_prices)
 
 
