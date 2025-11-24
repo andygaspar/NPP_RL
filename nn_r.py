@@ -2,7 +2,9 @@ import torch
 import torch.nn as nn
 import numpy as np
 from torch import optim
+from torchrl.modules import TruncatedNormal
 
+from Instance import instance
 from Instance.instance import Instance, get_feature_size
 from torch.distributions import Categorical, Normal, Beta
 
@@ -10,123 +12,145 @@ from Solver.solver import GlobalSolver
 
 
 class Net(nn.Module):
-    def __init__(self, input_size, hidden, n_paths):
+    def __init__(self, input_size, hidden, n_paths, n_samples):
         super().__init__()
         self.fc1 = nn.Linear(input_size, hidden)
         self.fc2 = nn.Linear(hidden, hidden)
-        self.fc3 = nn.Linear(hidden, n_paths * 2)
+        self.fc3 = nn.Linear(hidden, hidden)
+        self.final = nn.Linear(hidden, n_paths * 2)
         self.act = nn.LeakyReLU()
         self.soft_plus = nn.Softplus()
         self.n_paths = n_paths
+        self.n_samples = n_samples
+
+        # Better initialization
+        nn.init.xavier_uniform_(self.final.weight)
+        nn.init.constant_(self.final.bias, 0.0)
 
     def forward(self, x):
         l_p = x[:, : self.n_paths]
         n_p = x[:, self.n_paths: self.n_paths * 2]
         x = self.act(self.fc1(x))
         x = self.act(self.fc2(x))
-        x = self.fc3(x)
+        x = self.act(self.fc3(x))
+        x = self.final(x)
         x = x.view(-1, self.n_paths, 2)
-        # Stable parameter computation with constraints
+
         alpha_raw = x[:, :, 0]
         beta_raw = x[:, :, 1]
 
-        # Clip raw values before softplus to prevent explosion
-        alpha_raw = torch.clip(alpha_raw, -50, 50)   # [-5, 5]
-        beta_raw = torch.clip(beta_raw, -50, 50)
-        # Apply softplus with minimum value
-        alpha = self.soft_plus(alpha_raw).view(-1, self.n_paths) + 1e-6
-        beta = self.soft_plus(beta_raw).view(-1, self.n_paths) + 1e-6
-        # alpha = self.soft_plus(x[:, :, :1]).view(-1, self.n_paths)
-        # beta = self.soft_plus(x[:, :, 1:]).view(-1, self.n_paths)
-        mm = Beta(alpha, beta)
-        sample = mm.sample((100,))
-        action = l_p + (n_p - l_p) * sample
+        # FIXED: Proper alpha range [0.1, 0.9]
+        alpha = 0.5 + 0.5 * torch.tanh(alpha_raw)  # [0.1, 0.9]
 
+        # Better beta range for exploration
+        beta = 0.05 + 0.2 * torch.sigmoid(beta_raw)  # [0.05, 0.25]
+
+        mm = TruncatedNormal(alpha, beta, low=0, high=1)
+        sample = mm.sample((self.n_samples,))
+        action = l_p + (n_p - l_p) * sample
         log_action = mm.log_prob(sample)
 
-        return action, log_action, x[:, :, :1], alpha, beta
+        return action, log_action, alpha, beta
 
 
 class Agent:
-
     def __init__(self, net: Net, lr, wd):
         self.net = net
         self.optimizer = optim.Adam(net.parameters(), lr=lr, weight_decay=wd)
-        self.best_val = 1
-
-    def update_best_val(self, obj):
-        if obj > self.best_val:
-            self.best_val = obj
 
 
-    # Funzione per generare un'istanza casuale e vettorizzare l'input
     @staticmethod
     def make_instance_flat(instance: Instance):
-        l_p = [p.L_p for p in inst.paths]
-        n_p = [p.N_p for p in inst.paths]
-        rows = l_p + n_p
+        # FIXED: Use np.concatenate, not np.concat
+        rows = np.concatenate([instance.lower_bounds, instance.upper_bounds])
         for c in instance.commodities:
-            rows += [c.n_users, c.c_od] + list(c.c_p_vector)
-        # Creazione di un vettore unico
-        X_flat = np.array(rows).flatten()
-        return torch.tensor(X_flat, dtype=torch.float32).unsqueeze(0)
+            rows = np.concatenate([rows, [c.n_users, c.c_od], c.c_p_vector])
+        return torch.tensor(rows, dtype=torch.float32).unsqueeze(0)
 
     def get_action(self, instance: Instance, eval=False):
         X_flat = self.make_instance_flat(instance)
         if eval:
             with torch.no_grad():
-                X_flat.requires_grad = True
                 return self.net(X_flat)
         else:
             return self.net(X_flat)
 
-    def train(self, log_action, reward, alpha, beta):
-        loss = -(reward/self.best_val * log_action).mean() + 2*(torch.abs(alpha/50).sum() + torch.abs(beta/50).sum())/(alpha.shape[-1]*2)
+    def train(self, log_action, reward, baseline):
+
+        advantage = reward - baseline
+
+        # Normalize advantage for stability
+        if advantage.std() > 0:
+            advantage = (advantage - advantage.mean()) / (advantage.std() + 1e-8)
+
+        loss = -(advantage * log_action).mean()
+
+        self.optimizer.zero_grad()
         loss.backward()
+        torch.nn.utils.clip_grad_norm_(self.net.parameters(), max_norm=1.0)
         self.optimizer.step()
+
         return loss.item()
 
 
-N_COMM = 4
-N_PATHS = 4
+N_COMM = 10
+N_PATHS = 10
 SEED = 1
-HIDEEN = 64
+HIDDEN = 64
+N_SAMPLES = 100
+EPISODES = 3000
 
-lr = 0.000001
+lr = 0.001
 wd = 0.0001
+
+score_vs_random = 0
 
 torch.manual_seed(SEED)
 
-
-net = Net(get_feature_size(N_PATHS, N_COMM), HIDEEN, N_PATHS)
-
+net = Net(get_feature_size(N_PATHS, N_COMM), HIDDEN, N_PATHS, N_SAMPLES)
 agent = Agent(net, lr, wd)
-
 
 inst = Instance(n_paths=N_PATHS, n_commodities=N_COMM, seed=SEED)
 solver = GlobalSolver(inst)
-l_p = [p.L_p for p in inst.paths]
-n_p = [p.N_p for p in inst.paths]
-print(l_p, n_p)
 solver.solve()
-print(solver.obj)
-print(solver.solution)
+optimal_value = solver.obj
+print(f"Optimal solution: {optimal_value}")
+
+for episode in range(EPISODES):
+    prices, log_prices, alpha, beta = agent.get_action(inst)
+
+    # Calculate rewards
+    rewards = []
+    rand_rewards = []
+    best_episode_val = 0
+
+    for i, price_sample in enumerate(prices):
+        # Network's action
+        val = inst.compute_solution_value_with_tol(price_sample[0].detach().numpy())
+        rewards.append(val)
+        if val > best_episode_val:
+            best_episode_val = val
+
+        # Random baseline
+        rand_val = inst.compute_solution_value_with_tol(
+            np.random.uniform(inst.lower_bounds, inst.upper_bounds)
+        )
+        rand_rewards.append(rand_val)
+        if val > rand_val:
+            score_vs_random += 1
+
+    # Convert to tensor
+    reward_tensor = torch.tensor(rewards, dtype=torch.float32).unsqueeze(1)
+    max_baseline_reward = max(rand_rewards)
 
 
-for _ in range(100000):
+    loss = agent.train(log_prices, reward_tensor, max_baseline_reward)
 
-    prices, log_prices, x, alpha, beta = agent.get_action(inst)
-    res = []
-    for p in prices:
-        val = inst.compute_solution_value_with_tol(p)
-        res.append([val for _ in range(N_PATHS)])
-        agent.update_best_val(val)
-    res = torch.tensor(res, dtype=torch.float32).unsqueeze(1)
-    loss = agent.train(log_prices, res, alpha, beta)
-    #
-    if _ % 1000 == 0:
-        print(_, "objval", res[0][0], loss, prices[0].cpu().tolist(), alpha, beta)
-        # print("Output rete (non allenata):", prices, log_prices)
-
-
-# {$p_{0}$: 11.197899321371724, $p_{1}$: 8.171189523729565, $p_{2}$: 13.455847349152648, $p_{3}$: 4.499325391483689}
+    if episode % 50 == 0:
+        max_idx = np.argmax(rewards)
+        rand_max = max(rand_rewards) if rand_rewards else 0
+        print(f"E{episode:4d} | "
+              f"WinRate: {score_vs_random / ((episode + 1) * N_SAMPLES):.3f} | "
+              f"Curr: {best_episode_val:.3f} | "
+              f"Rand: {rand_max:.3f} | "
+              f"Loss: {loss:.6f} | ")
