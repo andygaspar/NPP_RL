@@ -36,21 +36,18 @@ class Net(nn.Module):
         x = self.final(x)
         x = x.view(-1, self.n_paths, 2)
 
-        alpha_raw = x[:, :, 0]
-        beta_raw = x[:, :, 1]
+        mu_raw = x[:, :, 0]
+        sigma_raw = x[:, :, 1]
 
-        # FIXED: Proper alpha range [0.1, 0.9]
-        alpha = 0.5 + 0.5 * torch.tanh(alpha_raw)  # [0.1, 0.9]
+        mu = 0.5 + 0.5 * torch.tanh(mu_raw)
+        sigma = 0.05 + 0.2 * torch.sigmoid(sigma_raw)  # [0.05, 0.25]
 
-        # Better beta range for exploration
-        beta = 0.05 + 0.2 * torch.sigmoid(beta_raw)  # [0.05, 0.25]
-
-        mm = TruncatedNormal(alpha, beta, low=0, high=1)
+        mm = TruncatedNormal(mu, sigma, low=0, high=1)
         sample = mm.sample((self.n_samples,))
         action = l_p + (n_p - l_p) * sample
         log_action = mm.log_prob(sample)
 
-        return action, log_action, alpha, beta
+        return action, log_action
 
 
 class Agent:
@@ -67,7 +64,7 @@ class Agent:
             rows = np.concatenate([rows, [c.n_users, c.c_od], c.c_p_vector])
         return torch.tensor(rows, dtype=torch.float32).unsqueeze(0)
 
-    def get_action(self, instance: Instance, eval=False):
+    def get_action(self, instance: Instance, eval):
         X_flat = self.make_instance_flat(instance)
         if eval:
             with torch.no_grad():
@@ -93,8 +90,8 @@ class Agent:
         return loss.item()
 
 
-N_COMM = 10
-N_PATHS = 10
+N_COMM = 20
+N_PATHS = 56
 SEED = 1
 HIDDEN = 64
 N_SAMPLES = 100
@@ -111,25 +108,23 @@ net = Net(get_feature_size(N_PATHS, N_COMM), HIDDEN, N_PATHS, N_SAMPLES)
 agent = Agent(net, lr, wd)
 
 inst = Instance(n_paths=N_PATHS, n_commodities=N_COMM, seed=SEED)
-solver = GlobalSolver(inst)
+solver = GlobalSolver(inst, time_limit=3600, verbose=True)
 solver.solve()
 optimal_value = solver.obj
 print(f"Optimal solution: {optimal_value}")
 
 for episode in range(EPISODES):
-    prices, log_prices, alpha, beta = agent.get_action(inst)
+    inst = Instance(n_paths=N_PATHS, n_commodities=N_COMM, seed=episode)
+    prices, log_prices = agent.get_action(inst, eval=False)
 
     # Calculate rewards
     rewards = []
     rand_rewards = []
-    best_episode_val = 0
 
     for i, price_sample in enumerate(prices):
         # Network's action
         val = inst.compute_solution_value_with_tol(price_sample[0].detach().numpy())
         rewards.append(val)
-        if val > best_episode_val:
-            best_episode_val = val
 
         # Random baseline
         rand_val = inst.compute_solution_value_with_tol(
@@ -147,10 +142,9 @@ for episode in range(EPISODES):
     loss = agent.train(log_prices, reward_tensor, max_baseline_reward)
 
     if episode % 50 == 0:
-        max_idx = np.argmax(rewards)
-        rand_max = max(rand_rewards) if rand_rewards else 0
+        max_agent = reward_tensor.max().item()
         print(f"E{episode:4d} | "
               f"WinRate: {score_vs_random / ((episode + 1) * N_SAMPLES):.3f} | "
-              f"Curr: {best_episode_val:.3f} | "
-              f"Rand: {rand_max:.3f} | "
+              f"Rand: {max_baseline_reward:.3f} | "
+              f"Agent: {max_agent:.3f} | "
               f"Loss: {loss:.6f} | ")

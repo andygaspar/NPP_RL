@@ -65,8 +65,7 @@ class GlobalSolver:
     def set_obj(self):
         k: Commodity
         self.m.setObjective(quicksum(k.n_users * self.p[(p, k)]
-                                     for p in self.instance.paths for k in self.instance.commodities)
-                            - quicksum(10**(-3) * self.t[p] for p in self.instance.paths))
+                                     for p in self.instance.paths for k in self.instance.commodities))
 
     def set_constraints(self):
         for k in self.instance.commodities:
