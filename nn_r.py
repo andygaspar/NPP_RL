@@ -8,6 +8,7 @@ from Instance import instance
 from Instance.instance import Instance, get_feature_size
 from torch.distributions import Categorical, Normal, Beta
 
+from Solver.genetic_solver import Genetic
 from Solver.solver import GlobalSolver
 
 
@@ -90,12 +91,19 @@ class Agent:
         return loss.item()
 
 
-N_COMM = 20
-N_PATHS = 56
+N_COMM = 128
+N_PATHS = 128
 SEED = 1
 HIDDEN = 64
-N_SAMPLES = 100
+N_SAMPLES = 64
 EPISODES = 3000
+
+
+GA_ITERATIONS = 1000
+POPULATION = N_SAMPLES
+OFF_SIZE = int(POPULATION / 2)
+MUTATION_RATE = 0.02
+recombination_size = int(N_PATHS / 2)
 
 lr = 0.001
 wd = 0.0001
@@ -107,11 +115,12 @@ torch.manual_seed(SEED)
 net = Net(get_feature_size(N_PATHS, N_COMM), HIDDEN, N_PATHS, N_SAMPLES)
 agent = Agent(net, lr, wd)
 
-inst = Instance(n_paths=N_PATHS, n_commodities=N_COMM, seed=SEED)
-solver = GlobalSolver(inst, time_limit=3600, verbose=True)
-solver.solve()
-optimal_value = solver.obj
-print(f"Optimal solution: {optimal_value}")
+# inst = Instance(n_paths=N_PATHS, n_commodities=N_COMM, seed=SEED)
+# solver = GlobalSolver(inst, time_limit=3600, verbose=True)
+# solver.solve()
+# optimal_value = solver.obj
+# print(f"Optimal solution: {optimal_value}")
+won = 0
 
 for episode in range(EPISODES):
     inst = Instance(n_paths=N_PATHS, n_commodities=N_COMM, seed=episode)
@@ -138,8 +147,12 @@ for episode in range(EPISODES):
     reward_tensor = torch.tensor(rewards, dtype=torch.float32).unsqueeze(1)
     max_baseline_reward = max(rand_rewards)
 
+    g = Genetic(inst, pop_size=POPULATION, offs_size=OFF_SIZE, mutation_rate=MUTATION_RATE, recombination_size=recombination_size,
+                verbose=False, seed=SEED)
+    g.run(GA_ITERATIONS)
 
-    loss = agent.train(log_prices, reward_tensor, max_baseline_reward)
+
+    loss = agent.train(log_prices, reward_tensor, g.best_val)
 
     if episode % 50 == 0:
         max_agent = reward_tensor.max().item()
@@ -148,3 +161,15 @@ for episode in range(EPISODES):
               f"Rand: {max_baseline_reward:.3f} | "
               f"Agent: {max_agent:.3f} | "
               f"Loss: {loss:.6f} | ")
+
+        g = Genetic(inst, pop_size=POPULATION, offs_size=OFF_SIZE, mutation_rate=MUTATION_RATE, recombination_size=recombination_size,
+                    verbose=False, seed=SEED)
+        g.run(GA_ITERATIONS)
+
+        g_nn = Genetic(inst, pop_size=POPULATION, offs_size=OFF_SIZE, mutation_rate=MUTATION_RATE, recombination_size=recombination_size,
+                       verbose=False, seed=SEED)
+
+        prices_init = np.ascontiguousarray(prices.squeeze(1).detach().numpy())
+        g_nn.run(GA_ITERATIONS, init_population=prices_init)
+        won += (g.best_val <= g_nn.best_val)
+        print(won / (episode // 50 + 1), g.best_val, g_nn.best_val)
