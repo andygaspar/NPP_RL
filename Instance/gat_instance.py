@@ -63,9 +63,16 @@ class GATInstance(Instance):
             num_paths=num_paths
         )
 
+        # Normalise features
+        data.x[:, 0] /= self.MAX_N_USERS
+        data.x[:, 1] /= self.MAX_CR_FREE
+        data.x[:, 2] /= self.MAX_CR_TRANSFER
+
+        data.edge_attr[:, :2] /= self.MAX_CR_TRANSFER
+
         return data
 
-    def get_prices_from_net(self, t: torch.Tensor) -> np.ndarray:
+    def rescale_prices(self, t: torch.Tensor) -> np.ndarray:
         prices = np.ascontiguousarray(t.detach().to('cpu').numpy())
         lb = np.repeat(self.lower_bounds, t.shape[0]).reshape(self.n_paths, -1).T
         ub_minus_lb = np.repeat(self.ub_minus_lb, t.shape[0]).reshape(self.n_paths, -1).T

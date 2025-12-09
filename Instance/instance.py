@@ -63,7 +63,7 @@ class Path:
 
 
 class Instance(nx.Graph):
-    def __init__(self, n_paths, n_commodities, partial=True, cr_transfer=(1, 20), nr_users=(1, 10), seed=None,
+    def __init__(self, n_paths, n_commodities, partial=True, seed=None,
                  **attr):
         super().__init__(**attr)
         if seed is not None:
@@ -75,9 +75,13 @@ class Instance(nx.Graph):
         self.paths: List[Path]
         self.users = []
         self.partial = partial
-        self.cr_free = (10, 30) if partial else (20, 30)
-        self.cr_transfer = cr_transfer
-        self.nr_users = nr_users
+
+        self.MIN_CR_FREE, self.MAX_CR_FREE = (10, 30) if partial else (20, 30)
+        self.MIN_CR_TRANSFER, self.MAX_CR_TRANSFER = (20, 30)
+        self.MIN_N_USERS, self.MAX_N_USERS = (1, 10)
+        self.cr_free = (self.MIN_CR_FREE, self.MAX_CR_FREE)
+        self.cr_transfer = (self.MIN_CR_TRANSFER, self.MAX_CR_TRANSFER)
+        self.nr_users = (self.MIN_N_USERS, self.MAX_N_USERS)
 
         com_names = [self.get_com_name(i) for i in range(self.n_commodities)]
         paths_names = [self.get_path_name(i) for i in range(self.n_paths)]
@@ -92,9 +96,9 @@ class Instance(nx.Graph):
         for i in range(self.n_commodities):
             for j in range(self.n_paths):
                 self.add_edge(com_names[i], self.get_path_name(j), color='y',
-                              transfer=np.random.uniform(*cr_transfer))
+                              transfer=np.random.uniform(*self.cr_transfer))
 
-        self.commodities = [Commodity(name, nr_users, com_names, paths_names, self) for name in com_names]
+        self.commodities = [Commodity(name, self.nr_users, com_names, paths_names, self) for name in com_names]
         self.paths = [Path(name, self.commodities, self) for name in paths_names]
 
         self.commodities_tax_free = np.array([comm.c_od for comm in self.commodities])

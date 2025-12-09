@@ -79,7 +79,7 @@ class EGAT(torch.nn.Module):
         sigma_raw = x[:, 1]
 
         mu = 0.5 + 0.5 * torch.tanh(mu_raw)
-        sigma = 0.05 + 0.005 * torch.sigmoid(sigma_raw) * 0.1
+        sigma = 0.05 + 0.005 * torch.sigmoid(sigma_raw) * 0.3
 
         eps = torch.randn((self.n_samples, len(mu)), device=mu.device)
         sample = mu + sigma * eps
