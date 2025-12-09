@@ -1,6 +1,10 @@
+import os
+
 import torch
 import torch.nn.functional as F
 from torch_geometric.nn import GATv2Conv
+
+from Instance.gat_instance import create_batch
 
 
 def truncated_normal_log_prob(x, mu, sigma, low=0, high=1):
@@ -26,10 +30,9 @@ def truncated_normal_log_prob(x, mu, sigma, low=0, high=1):
 
 # Node Classification Model using EGAT
 class EGAT(torch.nn.Module):
-    def __init__(self, hidden_channels, out_channels, n_samples, lr, wd, heads=3, dropout=0.5):
+    def __init__(self, hidden_channels, out_channels, lr, wd, heads=3, dropout=0.5):
         super().__init__()
 
-        self.n_samples = n_samples
         # EGAT layers
         self.conv1 = GATv2Conv(
             in_channels=4,
@@ -61,7 +64,7 @@ class EGAT(torch.nn.Module):
         self.optimizer = torch.optim.Adam(self.parameters(), lr=lr, weight_decay=wd)
         self.dropout = dropout
 
-    def forward(self, batch):
+    def forward(self, batch, n_samples):
         x, edge_index, edge_attr = batch.x, batch.edge_index, batch.edge_attr
 
         x = self.conv1(x, edge_index, edge_attr)
@@ -81,18 +84,25 @@ class EGAT(torch.nn.Module):
         mu = 0.5 + 0.5 * torch.tanh(mu_raw)
         sigma = 0.05 + 0.005 * torch.sigmoid(sigma_raw) * 0.3
 
-        eps = torch.randn((self.n_samples, len(mu)), device=mu.device)
+        eps = torch.randn((n_samples, len(mu)), device=mu.device)
         sample = mu + sigma * eps
         sample = torch.clamp(sample, 0, 1)  # Truncate to [0, 1]
 
         # Calculate log probabilities - MANUALLY with broadcasting
         # Expand mu and sigma to match sample shape
-        mu_expanded = mu.unsqueeze(0).expand(self.n_samples, -1)
-        sigma_expanded = sigma.unsqueeze(0).expand(self.n_samples, -1)
+        mu_expanded = mu.unsqueeze(0).expand(n_samples, -1)
+        sigma_expanded = sigma.unsqueeze(0).expand(n_samples, -1)
 
         log_action = truncated_normal_log_prob(sample, mu_expanded, sigma_expanded, low=0, high=1)
 
         return sample, log_action
+
+    def get_distribution(self, instance, n_samples):
+        batch = create_batch([instance])
+        with torch.no_grad():
+            sample, _ = self.forward(batch, n_samples)
+            mask = batch.x[:, -1] == 1  # get only paths (i.e. x[:, -1 == 1) of the batch
+            return sample[:, mask]
 
     def train_policy(self, log_action, reward, baseline):
 
@@ -110,4 +120,42 @@ class EGAT(torch.nn.Module):
         self.optimizer.step()
 
         return loss.item()
+
+    def save(self, path):
+
+        os.makedirs(os.path.dirname(os.path.abspath(path)), exist_ok=True)
+
+        save_dict = {
+            'model_state_dict': self.state_dict(),
+            'optimizer_state_dict': self.optimizer.state_dict(),
+            'model_config': {
+                'hidden_channels': self.conv1.out_channels * self.conv1.heads,
+                'out_channels': self.conv3.out_channels,
+                'lr': self.optimizer.param_groups[0]['lr'],
+                'wd': self.optimizer.param_groups[0]['weight_decay'],
+                'heads': self.conv1.heads,
+                'dropout': self.dropout
+            }
+        }
+
+        torch.save(save_dict, path)
+        print(f"Model saved in: {path}")
+
+    def load(self, path, device=None):
+        if device is None:
+            device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+
+        net = torch.load(path, map_location=device)
+
+        # Carica i pesi del modello
+        self.load_state_dict(net['model_state_dict'])
+
+        # Carica lo stato dell'ottimizzatore
+        self.optimizer.load_state_dict(net['optimizer_state_dict'])
+        self.to(device)
+
+        print(f"Modello caricato da: {path}")
+        print(f"Modello spostato su: {device}")
+
+        return net
 

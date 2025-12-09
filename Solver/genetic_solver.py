@@ -54,6 +54,7 @@ class Genetic:
         for i in range(self.n_paths):
             vals = self.values[self.npp.paths[i].L_p <= self.values]
             vals = vals[self.npp.paths[i].N_p >= vals]
+            vals = vals if len(vals) > 0 else [0]
             population[:self.pop_size, i] = (
                 np.random.choice(vals, size=self.pop_size, replace=True))
         return population
