@@ -10,14 +10,14 @@ from Instance.instance import Instance
 
 
 class Genetic:
-    def __init__(self, npp: Instance, pop_size, offs_size, mutation_rate, recombination_size,
+    def __init__(self, npp: Instance, pop_size, offs_size=None, mutation_rate= None, recombination_size= None,
                  verbose=True, n_threads=None, seed=None):
         self.solution = None
         self.time = None
         self.pop_size = pop_size
-        self.offs_size = offs_size
-        self.mutation_rate = mutation_rate
-        self.recombination_size = recombination_size
+        self.offs_size = offs_size if offs_size is not None else pop_size // 2
+        self.mutation_rate = mutation_rate if mutation_rate is not None else 0.02
+        self.recombination_size = recombination_size if recombination_size is not None else npp.n_paths//2
         self.verbose = verbose
         self.seed = seed
         self.num_threads = n_threads
@@ -25,7 +25,6 @@ class Genetic:
         self.n_paths = npp.n_paths
         self.npp = npp
         self.upper_bounds = npp.upper_bounds
-        self.mutation_rate = mutation_rate
         self.best_val = None
         self.time = None
 
