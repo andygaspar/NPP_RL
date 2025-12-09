@@ -6,6 +6,8 @@ from Instance.gat_instance import create_batch, GATInstance
 from Solver.genetic_solver import Genetic
 from gat import EGAT
 
+file_name = 'NET/test_1000.pth'
+
 N_COMM = range(20, 30)
 N_PATHS = range(20, 30)
 SEED = 1
@@ -14,7 +16,7 @@ N_SAMPLES = 20
 ITERATIONS = 3000
 EPISODE_PER_BATCH = 64
 
-BASELINE_ITERATIONS = 100
+BASELINE_ITERATIONS = 1000
 POPULATION = N_SAMPLES
 
 lr = 0.001
@@ -55,7 +57,7 @@ for iteration in range(ITERATIONS):
         rand_gaps += [agent_best_val/random_best_val]
 
     if iteration > 500 and BEST_GAP < np.mean(gaps):
-        agent.save('NET/test.pth')
+        agent.save(file_name)
         BEST_GAP = np.mean(gaps)
 
     reward_tensor = torch.tensor(rewards, dtype=torch.float32)
