@@ -78,6 +78,18 @@ class GATInstance(Instance):
         ub_minus_lb = np.repeat(self.ub_minus_lb, t.shape[0]).reshape(self.n_paths, -1).T
         return lb + prices * ub_minus_lb
 
+    def eval_sample(self, sample_tensor: torch.Tensor):
+        from Solver.genetic_solver import Genetic
+        g = Genetic(self, pop_size=sample_tensor.shape[0], verbose=False)
+        g.run(1, init_population=self.rescale_prices(sample_tensor))
+        return g.final_vals, g.best_val
+
+    def random_baseline(self, sample_size):
+        random_sol = np.random.uniform(self.lower_bounds, self.upper_bounds, (sample_size, self.n_paths))
+        from Solver.genetic_solver import Genetic
+        g = Genetic(self, pop_size=sample_size, verbose=False)
+        g.run(1, init_population=random_sol)
+        return g.best_val
 
 def create_batch(instances: List[GATInstance]):
     """Create a batch of heterographs"""
