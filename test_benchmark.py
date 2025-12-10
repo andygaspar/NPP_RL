@@ -3,21 +3,26 @@ import numpy as np
 from Instance.gat_instance import GATInstance
 from Solver.genetic_solver import Genetic
 from Solver.solver import GlobalSolver
-from gat import EGAT
+from gat import EGAT, load_agent
 
 file_name = 'NET/test_1000.pth'
 
+
+# load_model(file_name)
 # Carica
-agent = EGAT(hidden_channels=64, out_channels=2, lr=0.001, wd=0.0001)
-agent.load(file_name, device='cpu')
+# agent = EGAT(hidden_channels=64, out_channels=2, lr=0.001, wd=0.0001)
+# agent.load(file_name, device='cpu')
+agent = load_agent(file_name)
+
+
 
 BASELINE_ITERATIONS = 10000
 POPULATION = 128
 
-# N_PATHS = [20, 30, 40, 50]
-# N_COMMS = [20, 30, 40, 50]
-N_PATHS = [100, 200]
-N_COMMS = [100, 200]
+N_PATHS = [20, 30, 40, 50]
+N_COMMS = [20, 30, 40, 50]
+# N_PATHS = [100, 200]
+# N_COMMS = [100, 200]
 
 N_RUNS = 10
 
@@ -36,7 +41,7 @@ for path in N_PATHS:
             wins += g.best_val <= g_nn.best_val
             gaps += [g_nn.best_val/g.best_val]
 
-            solver = GlobalSolver(instance, time_limit=g_nn.time, verbose=False)
+            solver = GlobalSolver(instance, time_limit=max(g_nn.time, 60), verbose=False)
             solver.solve()
             exact_gaps += [g_nn.best_val / solver.obj]
 

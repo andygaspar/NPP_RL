@@ -30,8 +30,13 @@ def truncated_normal_log_prob(x, mu, sigma, low=0, high=1):
 
 # Node Classification Model using EGAT
 class EGAT(torch.nn.Module):
-    def __init__(self, hidden_channels, out_channels, lr, wd, heads=3, dropout=0.5):
+    def __init__(self, hidden_channels=64, out_channels=2, lr=0.001, wd=0.0001, heads=3, dropout=0.5):
         super().__init__()
+
+        self.hidden_init = hidden_channels
+        self.output_init = out_channels
+        self.heads_init = heads
+        self.dropout_init = dropout
 
         # EGAT layers
         self.conv1 = GATv2Conv(
@@ -82,7 +87,7 @@ class EGAT(torch.nn.Module):
         sigma_raw = x[:, 1]
 
         mu = 0.5 + 0.5 * torch.tanh(mu_raw)
-        sigma = 0.05 + 0.005 * torch.sigmoid(sigma_raw) * 0.3
+        sigma = 0.005 + torch.sigmoid(sigma_raw) * 0.03
 
         eps = torch.randn((n_samples, len(mu)), device=mu.device)
         sample = mu + sigma * eps
@@ -135,7 +140,9 @@ class EGAT(torch.nn.Module):
                 'wd': self.optimizer.param_groups[0]['weight_decay'],
                 'heads': self.conv1.heads,
                 'dropout': self.dropout
-            }
+            },
+            'init_params': {'hidden_init': self.hidden_init, 'output_init': self.output_init,
+                            'heads_init': self.heads_init, 'dropout_init': self.dropout_init},
         }
 
         torch.save(save_dict, path)
@@ -159,3 +166,13 @@ class EGAT(torch.nn.Module):
 
         return net
 
+
+def load_agent(path, device=None) -> EGAT:
+    if device is None:
+        device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+
+    init_params = torch.load(path, map_location=device)['init_params']
+    agent = EGAT(hidden_channels=init_params['hidden_init'], out_channels=init_params['output_init'],
+                 heads=init_params['heads_init'], dropout=init_params['dropout_init'])
+    agent.load(path, device='cpu')
+    return agent
