@@ -15,6 +15,8 @@ device = agent.device
 BASELINE_ITERATIONS = 10000
 POPULATION = 128
 
+TIME_LIMIT = 1800
+
 
 CASES = [(20, 20), (56, 56), (90, 90), (180, 180), (360, 360), (720, 720), (20, 360), (360, 20)]
 
@@ -45,7 +47,7 @@ for case in CASES:
         wins += g.best_val <= g_nn.best_val
         gaps += [g_nn.best_val / g.best_val]
 
-        solver = GlobalSolver(instance, time_limit=max(g_nn.time, 60), verbose=False)
+        solver = GlobalSolver(instance, time_limit=TIME_LIMIT, verbose=False)
         solver.solve()
         exact_gaps += [g_nn.best_val / solver.obj]
         df.loc[df.shape[0]] = [run, comm, paths,

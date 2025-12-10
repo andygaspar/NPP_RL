@@ -85,7 +85,7 @@ for iteration in range(ITERATIONS):
     if iteration % 25 == 0:
         max_agent = reward_tensor.max().item()
         print(f"E{iteration:4d} | " 
-              f"Train time {time.time() - t:.1f} | " 
+              f"Train time {time.time() - t:.1f} || " 
               f"WinRate: {wins / EPISODE_PER_BATCH :.3f} | "
               f"avg gap: {np.mean(gaps) :.3f} | "
               f"loss: {loss :.3f}  ||  "
