@@ -110,6 +110,8 @@ class EGAT(torch.nn.Module):
 
     def get_distribution(self, instance, n_samples):
         batch = create_batch([instance])
+        if self.device.type == 'cuda':
+            batch = batch.to(self.device)
         with torch.no_grad():
             sample, _ = self.forward(batch, n_samples)
             mask = batch.x[:, -1] == 1  # get only paths (i.e. x[:, -1 == 1) of the batch
@@ -159,7 +161,8 @@ class EGAT(torch.nn.Module):
         if device is None:
             device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
-        net = torch.load(path, map_location=device)
+        net = torch.load(path, map_location=device, weights_only=False)
+        self.device = device
 
         # Carica i pesi del modello
         self.load_state_dict(net['model_state_dict'])
@@ -178,9 +181,9 @@ def load_agent(path, device=None) -> EGAT:
     if device is None:
         device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
-    init_params = torch.load(path, map_location=device)['init_params']
+    init_params = torch.load(path, map_location=device, weights_only=False)['init_params']
     agent = EGAT(hidden_channels=init_params['hidden_init'], out_channels=init_params['output_init'],
                  heads=init_params['heads_init'], dropout=init_params['dropout_init'])
     agent.best_gap = init_params['best_gap']
-    agent.load(path, device='cpu')
+    agent.load(path, device=device)
     return agent
