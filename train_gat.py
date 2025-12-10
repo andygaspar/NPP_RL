@@ -1,4 +1,6 @@
 import random
+import time
+
 import numpy as np
 import torch
 
@@ -6,29 +8,36 @@ from Instance.gat_instance import create_batch, GATInstance
 from Solver.genetic_solver import Genetic
 from gat import EGAT
 
+device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+# device = torch.device('cpu')
+
+print('Experiments running on', device)
 file_name = 'NET/test_1000.pth'
 
 N_COMM = range(20, 30)
 N_PATHS = range(20, 30)
 SEED = 1
+
 HIDDEN = 64
+
 N_SAMPLES = 20
 ITERATIONS = 3000
-EPISODE_PER_BATCH = 64
+EPISODE_PER_BATCH = 128
 
 BASELINE_ITERATIONS = 1000
 POPULATION = N_SAMPLES
 
 lr = 0.001
 wd = 0.0001
-agent = EGAT(HIDDEN, 2, lr=lr, wd=wd)
+agent = EGAT(HIDDEN, 2, lr=lr, wd=wd, device=device)
 
 BEST_GAP = 0
+t = time.time()
 
 for iteration in range(ITERATIONS):
-    instances = [GATInstance(np.random.choice(N_PATHS), np.random.choice(N_COMM), seed=0) for i in range(EPISODE_PER_BATCH)]
+    instances = [GATInstance(np.random.choice(N_PATHS), np.random.choice(N_COMM), seed=i) for i in range(EPISODE_PER_BATCH)]
 
-    batch = create_batch(instances)
+    batch = create_batch(instances, device=device)
 
     samples, log_probs = agent(batch, N_SAMPLES)
 
@@ -60,15 +69,16 @@ for iteration in range(ITERATIONS):
         agent.save(file_name)
         BEST_GAP = np.mean(gaps)
 
-    reward_tensor = torch.tensor(rewards, dtype=torch.float32)
-    baseline_tensor = torch.tensor(baselines, dtype=torch.float32)
+    reward_tensor = torch.tensor(rewards, dtype=torch.float32, device=device)
+    baseline_tensor = torch.tensor(baselines, dtype=torch.float32, device=device)
     log_prices = torch.cat(log_prices)
 
     loss = agent.train_policy(log_prices, reward_tensor, baseline_tensor)
 
-    if iteration % 50 == 0:
+    if iteration % 25 == 0:
         max_agent = reward_tensor.max().item()
         print(f"E{iteration:4d} | " 
+              f"Train time {time.time() - t:.1f} | " 
               f"WinRate: {wins / EPISODE_PER_BATCH :.3f} | "
               f"avg gap: {np.mean(gaps) :.3f} | "
               f"loss: {loss :.3f}  ||  "

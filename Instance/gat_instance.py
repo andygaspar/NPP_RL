@@ -91,9 +91,14 @@ class GATInstance(Instance):
         g.run(1, init_population=random_sol)
         return g.best_val
 
-def create_batch(instances: List[GATInstance]):
+
+def create_batch(instances: List[GATInstance], device=torch.device('cpu')):
     """Create a batch of heterographs"""
 
     hetero_data_list = [inst.homo_data for inst in instances]
     batch = Batch.from_data_list(hetero_data_list)
+    if device.type == 'cuda':
+        batch.to(device)
+
     return batch
+

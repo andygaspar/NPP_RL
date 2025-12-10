@@ -30,13 +30,14 @@ def truncated_normal_log_prob(x, mu, sigma, low=0, high=1):
 
 # Node Classification Model using EGAT
 class EGAT(torch.nn.Module):
-    def __init__(self, hidden_channels=64, out_channels=2, lr=0.001, wd=0.0001, heads=3, dropout=0.5):
+    def __init__(self, hidden_channels=64, out_channels=2, lr=0.001, wd=0.0001, heads=3, dropout=0.5, device=torch.device('cpu')):
         super().__init__()
 
         self.hidden_init = hidden_channels
         self.output_init = out_channels
         self.heads_init = heads
         self.dropout_init = dropout
+        self.device = device
 
         # EGAT layers
         self.conv1 = GATv2Conv(
@@ -68,6 +69,9 @@ class EGAT(torch.nn.Module):
 
         self.optimizer = torch.optim.Adam(self.parameters(), lr=lr, weight_decay=wd)
         self.dropout = dropout
+
+        if self.device.type == 'cuda':
+            self.to(self.device)
 
     def forward(self, batch, n_samples):
         x, edge_index, edge_attr = batch.x, batch.edge_index, batch.edge_attr
