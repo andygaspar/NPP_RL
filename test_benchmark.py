@@ -53,5 +53,6 @@ for case in CASES:
                                solver.final_gap, solver.m.status,
                                solver.time, g_nn.time + net_time, g.time, case_num]
     case_num += 1
+    df.to_csv('results/test.csv')
 
     print(paths, comm, wins / N_RUNS, np.mean(gaps), np.mean(exact_gaps))
