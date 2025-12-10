@@ -39,6 +39,8 @@ class EGAT(torch.nn.Module):
         self.dropout_init = dropout
         self.device = device
 
+        self.best_gap = 0
+
         # EGAT layers
         self.conv1 = GATv2Conv(
             in_channels=4,
@@ -146,11 +148,12 @@ class EGAT(torch.nn.Module):
                 'dropout': self.dropout
             },
             'init_params': {'hidden_init': self.hidden_init, 'output_init': self.output_init,
-                            'heads_init': self.heads_init, 'dropout_init': self.dropout_init},
+                            'heads_init': self.heads_init, 'dropout_init': self.dropout_init,
+                            'best_gap': self.best_gap
+                            },
         }
 
         torch.save(save_dict, path)
-        print(f"Model saved in: {path}")
 
     def load(self, path, device=None):
         if device is None:
@@ -178,5 +181,6 @@ def load_agent(path, device=None) -> EGAT:
     init_params = torch.load(path, map_location=device)['init_params']
     agent = EGAT(hidden_channels=init_params['hidden_init'], out_channels=init_params['output_init'],
                  heads=init_params['heads_init'], dropout=init_params['dropout_init'])
+    agent.best_gap = init_params['best_gap']
     agent.load(path, device='cpu')
     return agent

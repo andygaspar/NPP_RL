@@ -65,9 +65,11 @@ for iteration in range(ITERATIONS):
         rand_wins += random_best_val < agent_best_val
         rand_gaps += [agent_best_val/random_best_val]
 
-    if iteration > 500 and BEST_GAP < np.mean(gaps):
-        agent.save(file_name)
-        BEST_GAP = np.mean(gaps)
+    if iteration > 50 and BEST_GAP < np.mean(gaps):
+        agent.best_gap = np.mean(gaps)
+        agent.save(file_name, )
+        BEST_GAP = agent.best_gap
+        print(f"saved check point. Avg gap : {agent.best_gap: .3f}")
 
     reward_tensor = torch.tensor(rewards, dtype=torch.float32, device=device)
     baseline_tensor = torch.tensor(baselines, dtype=torch.float32, device=device)
