@@ -12,7 +12,6 @@ class SKKGraph(SPKK_instance):
         self.max_p = self.p.max()
         self.graph = self.create_graph_from_problem()
 
-
     def create_graph_from_problem(self):
         """
         Create a PyG graph from a Problem instance.
@@ -91,7 +90,7 @@ class SKKGraph(SPKK_instance):
 
         return data
 
-def create_SKK_batch(instances, device=torch.device('cpu')):
+def create_SKPP_batch(instances, device=torch.device('cpu')):
     """
     Create a batch of graphs from multiple Problem instances.
 
@@ -109,24 +108,24 @@ def create_SKK_batch(instances, device=torch.device('cpu')):
     return batch
 
 
-
-# Create multiple problems
-problems = [SKKGraph(M=4, K=3) for _ in range(3)]
-
-# Create batch of graphs
-# batch = SKKGraph.create_batch(problems)
-batch = create_SKK_batch(problems)
-
-print("Batch Information:")
-print(f"Number of graphs: {batch.num_graphs}")
-print(f"Total nodes: {batch.num_nodes}")
-print(f"Total edges: {batch.num_edges}")
-print(f"Node feature dim: {batch.num_node_features}")
-print(f"Edge feature dim: {batch.num_edge_features}")
-print(f"\nBatch attributes: {batch.keys}")
-
-# Access individual graph information
-print(f"\nFirst graph in batch:")
-print(f"  Items: {batch.num_items[0]}, Users: {batch.num_users[0]}")
-print(f"  Type A items: {batch.L[0]}")
+#
+# # Create multiple problems
+# problems = [SKKGraph(M=4, K=3) for _ in range(3)]
+#
+# # Create batch of graphs
+# # batch = SKKGraph.create_batch(problems)
+# batch = create_SKK_batch(problems)
+#
+# print("Batch Information:")
+# print(f"Number of graphs: {batch.num_graphs}")
+# print(f"Total nodes: {batch.num_nodes}")
+# print(f"Total edges: {batch.num_edges}")
+# print(f"Node feature dim: {batch.num_node_features}")
+# print(f"Edge feature dim: {batch.num_edge_features}")
+# print(f"\nBatch attributes: {batch.keys}")
+#
+# # Access individual graph information
+# print(f"\nFirst graph in batch:")
+# print(f"  Items: {batch.num_items[0]}, Users: {batch.num_users[0]}")
+# print(f"  Type A items: {batch.L[0]}")
 

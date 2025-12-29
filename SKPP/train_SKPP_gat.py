@@ -4,9 +4,11 @@ import time
 import numpy as np
 import torch
 
-from Instance.gat_instance import create_batch, GATInstance
+from SKPP.SKPP_graph_instance import create_SKPP_batch
+from SKPP.skpp_instance import SPKK_instance
 from Solver.genetic_solver import Genetic
 from gat import EGAT
+
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 # device = torch.device('cpu')
@@ -19,8 +21,8 @@ MIN_SIZE, MAX_SIZE = 15, 30
 
 file_name = 'NET/test_' + str(MIN_SIZE) + '_' + str(MAX_SIZE) + '.pth'
 
-N_COMM = range(MIN_SIZE, MAX_SIZE)
-N_PATHS = range(MIN_SIZE, MAX_SIZE)
+M = range(MIN_SIZE, MAX_SIZE)
+K = range(MIN_SIZE, MAX_SIZE)
 SEED = 1
 
 HIDDEN = 64
@@ -34,15 +36,15 @@ POPULATION = N_SAMPLES
 
 lr = 0.001
 wd = 0.0001
-agent = EGAT(4, 3, HIDDEN, 2, lr=lr, wd=wd, device=device)
+agent = EGAT(5, 3, HIDDEN, 2, lr=lr, wd=wd, device=device)
 
 BEST_GAP = 0
 t = time.time()
 
 for iteration in range(ITERATIONS):
-    instances = [GATInstance(np.random.choice(N_PATHS), np.random.choice(N_COMM), seed=i) for i in range(EPISODE_PER_BATCH)]
+    instances = [SPKK_instance(np.random.choice(M), np.random.choice(K)) for _ in range(EPISODE_PER_BATCH)]
 
-    batch = create_batch(instances, device=device)
+    batch = create_SKPP_batch(instances, device=device)
 
     samples, log_probs = agent(batch, N_SAMPLES)
 

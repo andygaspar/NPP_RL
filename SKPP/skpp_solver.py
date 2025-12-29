@@ -10,7 +10,7 @@ class MKP:
     def __init__(self, problem: SPKK_instance):
 
         self.model = gb.Model("BilevelReformulation")
-        # self.model.setParam('OutputFlag', 0)
+        self.model.setParam('OutputFlag', 0)
 
         self.inst = problem
         self.p = problem.p
@@ -47,8 +47,8 @@ class MKP:
         z = {}
         M = 10000
         N = 2000
-        p = self.model.addMVar(self.inst.L, vtype=GRB.BINARY)
-        t = self.model.addMVar((self.inst.K, self.inst.L), vtype=GRB.BINARY)
+        p = self.model.addMVar(self.inst.L)
+        t = self.model.addMVar((self.inst.K, self.inst.L))
         for k in range(self.inst.K):
             combs[k] = self.maximal_combinations_final(self.inst.w[k].tolist(), self.inst.c[k])
             z[k] = self.model.addMVar(len(combs[k]), vtype=GRB.BINARY)
@@ -58,12 +58,12 @@ class MKP:
             for c_idx, c in enumerate(combs[k]):
                 c_l = [i for i in c if i < self.inst.L]
                 c_f = [i for i in c if i >= self.inst.L]
-                for q in combs[k]:
+                for q_idx, q in enumerate(combs[k]):
                     q_l = [i for i in q if i < self.inst.L]
                     q_f = [i for i in q if i >= self.inst.L]
                     self.model.addConstr(
-                        self.p[0][c_f].sum() + t[c_l].sum() >=
-                        self.p[0][q_f].sum() + p[q_l].sum() - (1 - z[k][c_idx]) * M,
+                        self.p[k][c_f].sum() + t[k][c_l].sum() >=
+                        self.p[k][q_f].sum() + p[q_l].sum() - (1 - z[k][c_idx]) * M,
                         name = 'comb ' + str(c) + ' ' + str(q)
                     )
 
@@ -78,7 +78,7 @@ class MKP:
                 self.model.addConstr(t[k, i] <= p[i], name='t < p ' + str(k) + ' ' + str(i))
 
         self.model.setObjective(
-            ((self.p[:, :self.inst.L]) * self.x[:, :self.inst.L]).sum() - t.sum(), gb.GRB.MAXIMIZE
+            (self.p[:, :self.inst.L] * self.x[:, :self.inst.L]).sum() - t.sum(), gb.GRB.MAXIMIZE
         )
 
         self.model.optimize()
@@ -86,13 +86,6 @@ class MKP:
             self.model.computeIIS()
             for c in self.model.getConstrs():
                 if c.IISConstr: print(f'\t{c.constrname}: {self.model.getRow(c)} {c.Sense} {c.RHS}')
-
-        for k in range(self.inst.K):
-            print(self.x[k].x)
-            print(t[k].x)
-            for c_idx, c in enumerate(combs[k]):
-                if z[k][c_idx].x == 1:
-                    print(c)
 
         return self.model.objVal,  p.x
 
@@ -123,7 +116,6 @@ class MKP_pop:
             (self.x * self.w).sum(axis=2) <= self.inst.c
         )
         self.model.optimize()
-
         return ((self.p - p) * self.x.x)[:, :, :self.inst.L].sum(axis=-1).sum(axis=-1)
 
 

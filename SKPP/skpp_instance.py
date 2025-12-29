@@ -27,7 +27,8 @@ class SPKK_instance:
         self.w = np.random.randint(1, 100, size=(self.K, self.M))
         self.c = self.w.sum(axis=1)//4
         self.p = self.w + 10
-        self.p[:, :self.L] = np.stack((self.p[0, : self.L],) * self.K)
+        # p = np.stack((self.p[0, : self.L],) * self.K)
+        # self.p[:, :self.L] = p
 
 
 def generate_instance(M, K):

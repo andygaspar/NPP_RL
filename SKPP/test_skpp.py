@@ -8,22 +8,19 @@ from SKPP.skpp_instance import generate_instance
 
 np.random.seed(0)
 
-pb = generate_instance(6, 5)
+pb = generate_instance(10, 10)
 
-
+t = time.time()
 mpk = MKP(pb)
 obj, sol = mpk.solve()
-
-
 sol = np.array([sol])
-
 mpk_pop = MKP_pop(pb,1)
 val = mpk_pop.solve(sol)
-print('obj', obj, val)
+print('obj', obj, val, time.time() - t)
 
-# Run the GA
+## Run the GA
 pop_size = 128
-generations = 1000
+generations = 200
 
 method = 'greedy'  # 'exact'
 

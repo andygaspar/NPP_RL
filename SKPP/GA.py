@@ -54,7 +54,7 @@ class GA_MBK:
             # Print progress
             self.best_fitness = self.fitness[indices[0]]
             self.avg_fitness = np.mean(self.fitness)
-            if gen % 50 == 0:
+            if gen % 50 == 0 or gen == self.generations - 1:
                 print(f"Gen {gen}: Best={self.best_fitness:.2f}, Avg={self.avg_fitness:.2f}")
 
 
