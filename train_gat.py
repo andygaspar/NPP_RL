@@ -14,7 +14,7 @@ device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 print('Experiments running on', device)
 
 
-MIN_SIZE, MAX_SIZE = 20, 90
+MIN_SIZE, MAX_SIZE = 10, 30
 
 
 file_name = 'NET/test_' + str(MIN_SIZE) + '_' + str(MAX_SIZE) + '.pth'
@@ -66,9 +66,9 @@ for iteration in range(ITERATIONS):
         random_best_val = inst.random_baseline(N_SAMPLES)
 
         wins += g.best_val < agent_best_val
-        gaps += [agent_best_val/g.best_val]
+        gaps += [agent_best_val/g.best_val if g.best_val > 0 else 0]
         rand_wins += random_best_val < agent_best_val
-        rand_gaps += [agent_best_val/random_best_val]
+        rand_gaps += [agent_best_val/random_best_val if random_best_val > 0 else 0]
 
     if iteration > 50 and BEST_GAP < np.mean(gaps):
         agent.best_gap = np.mean(gaps)
