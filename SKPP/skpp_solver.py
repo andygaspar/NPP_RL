@@ -1,6 +1,7 @@
 import gurobipy as gb
 from gurobipy import GRB
 import numpy as np
+from scipy._lib.cobyqa import problem
 
 from skpp_instance import SPKK_instance
 
@@ -117,6 +118,7 @@ class SKPP_pop:
             (self.x * self.w).sum(axis=2) <= self.inst.c
         )
         self.model.optimize()
+        print((p* self.x.x).sum(axis=-1))
         vals = ((self.p - p) * self.x.x)[:, :, :self.inst.L].sum(axis=-1).sum(axis=-1)
         return vals, vals.max()
 
@@ -126,9 +128,10 @@ class SKPP_greedy_pop:
         self.inst = problem
         self.pop_size = pop_size
         self.p = np.array([problem.p for _ in range(self.pop_size)], dtype=float)
-        self.c = np.stack((np.stack((self.inst.c,) * self.inst.M, axis=1),) * self.pop_size)
+        self.c = np.stack((self.inst.c,) * self.pop_size)
         self.w = np.array([self.inst.w for _ in range(self.pop_size)])
         self.efficiency = np.zeros_like(self.w)
+        self.reindex_mat = np.stack((np.stack((range(self.inst.M),) * self.inst.K),) * self.pop_size)
 
     def solve(self, p_new):
         p_new = np.stack((p_new,) * self.inst.K, axis=1)
@@ -136,13 +139,19 @@ class SKPP_greedy_pop:
         p[:, :, :self.inst.L] = p_new
         self.efficiency = p / self.w
         indices = np.argsort(-self.efficiency, axis=-1)
-        cap_used = np.take_along_axis(self.w, indices, axis=-1)
-        cap_used = np.cumsum(cap_used, axis=-1) <= self.c
-        p_zero = np.zeros_like(self.p)
-        p_zero[:, :, :self.inst.L] = p_new
-        p_zero = np.take_along_axis(p_zero, indices, axis=-1) * cap_used
-        p = np.zeros_like(self.p)
-        p[:, :, :self.inst.L] = self.p[:, :, :self.inst.L]
-        p = np.take_along_axis(p, indices, axis=-1) * cap_used
-        vals = (p - p_zero).sum(axis=-1).sum(axis=-1)
+        inverse_indices = np.argsort(indices, axis=-1)
+        w_sorted = np.take_along_axis(self.w, indices, axis=-1)
+        x_sorted = np.zeros_like(p, dtype=bool)
+        x_sorted[:, :, 0] = True
+        cap_used = w_sorted[:, :, 0]
+        for i in range(1, self.inst.M):
+            new_cap = cap_used + w_sorted[:, :, i]
+            x_sorted[:, :, i] = (new_cap <= self.c)
+            cap_used += w_sorted[:, :, i] * x_sorted[:, :, i]
+
+        x = np.take_along_axis(x_sorted, inverse_indices, axis=-1)[:, :, :self.inst.L]
+        vals = ((self.p[:, :, :self.inst.L] - p_new) * x).sum(axis=-1).sum(axis=-1)
+        print((p * np.take_along_axis(x_sorted, inverse_indices, axis=-1)).sum(axis=-1) )
         return vals, vals.max()
+
+
