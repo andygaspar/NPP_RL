@@ -17,7 +17,7 @@ device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 print('Experiments running on', device)
 
 
-MIN_SIZE, MAX_SIZE = 15, 30
+MIN_SIZE, MAX_SIZE = 10, 30
 
 SAVE = False
 file_name = 'SKPP/NET/test_' + str(MIN_SIZE) + '_' + str(MAX_SIZE) + '.pth'
@@ -32,7 +32,7 @@ N_SAMPLES = 128
 ITERATIONS = 3000
 EPISODE_PER_BATCH = 128
 
-BASELINE_ITERATIONS = 100
+BASELINE_ITERATIONS = 20
 POPULATION = N_SAMPLES
 METHOD = 'greedy'
 
@@ -88,7 +88,7 @@ for iteration in range(ITERATIONS):
 
     loss = agent.train_policy(log_prices, reward_tensor, baseline_tensor)
 
-    if iteration % 25 == 0:
+    if iteration % 2 == 0:
         max_agent = reward_tensor.max().item()
         print(f"E{iteration:4d} | " 
               f"Train time {time.time() - t:.1f} || " 
