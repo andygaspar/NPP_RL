@@ -2,20 +2,20 @@ import time
 
 import numpy as np
 
-from SKPP.GA import  GA_MBK
-from SKPP.skpp_solver import MKP, MKP_pop
-from SKPP.skpp_instance import generate_instance
+from SKPP.GA_SKPP import GA_SKPP
+from SKPP.skpp_instance import SPKK_instance
+from SKPP.skpp_solver import SKPP, SKPP_pop
 
 np.random.seed(0)
 
-pb = generate_instance(10, 10)
+pb = SPKK_instance(6, 5)
 
 t = time.time()
-mpk = MKP(pb)
+mpk = SKPP(pb)
 obj, sol = mpk.solve(verbose = False)
 print(sol)
 sol = np.array([sol])
-mpk_pop = MKP_pop(pb,1)
+mpk_pop = SKPP_pop(pb,1)
 val = mpk_pop.solve(sol)
 print('obj', obj, val, time.time() - t)
 
@@ -23,18 +23,18 @@ print('obj', obj, val, time.time() - t)
 pop_size = 128
 generations = 200
 
-method = 'greedy'  # 'exact'
-
-t = time.time()
-ga = GA_MBK(pb, pop_size, generations, method)
-ga.solve()
-print('time', time.time() - t)
+# method = 'greedy'  # 'exact'
+#
+# t = time.time()
+# ga = GA_MBK(pb, pop_size, generations, method)
+# ga.solve()
+# print('time', time.time() - t)
 
 method = 'exact'
 
 t = time.time()
-ga = GA_MBK(pb, pop_size, generations, method)
-ga.solve()
+ga = GA_SKPP(pb, pop_size, method)
+ga.run(generations)
 print('time', time.time() - t)
 print(ga.best_solution)
 

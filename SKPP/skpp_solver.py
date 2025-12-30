@@ -5,7 +5,7 @@ import numpy as np
 from skpp_instance import SPKK_instance
 
 
-class MKP:
+class SKPP:
 
     def __init__(self, problem: SPKK_instance):
 
@@ -91,7 +91,7 @@ class MKP:
         return self.model.objVal,  p.x
 
 
-class MKP_pop:
+class SKPP_pop:
 
     def __init__(self, problem: SPKK_instance, pop_size: int):
         self.model = gb.Model("BilevelReformulation")
@@ -117,10 +117,11 @@ class MKP_pop:
             (self.x * self.w).sum(axis=2) <= self.inst.c
         )
         self.model.optimize()
-        return ((self.p - p) * self.x.x)[:, :, :self.inst.L].sum(axis=-1).sum(axis=-1)
+        vals = ((self.p - p) * self.x.x)[:, :, :self.inst.L].sum(axis=-1).sum(axis=-1)
+        return vals, vals.max()
 
 
-class MKP_greedy_pop:
+class SKPP_greedy_pop:
     def __init__(self, problem: SPKK_instance, pop_size: int):
         self.inst = problem
         self.pop_size = pop_size
@@ -143,4 +144,5 @@ class MKP_greedy_pop:
         p = np.zeros_like(self.p)
         p[:, :, :self.inst.L] = self.p[:, :, :self.inst.L]
         p = np.take_along_axis(p, indices, axis=-1) * cap_used
-        return (p - p_zero).sum(axis=-1).sum(axis=-1)
+        vals = (p - p_zero).sum(axis=-1).sum(axis=-1)
+        return vals, vals.max()
