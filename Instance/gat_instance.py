@@ -9,10 +9,10 @@ class GATInstance(Instance):
     def __init__(self, n_paths, n_commodities, **kwargs):
         super().__init__(n_paths, n_commodities, **kwargs)
         self.ub_minus_lb = self.upper_bounds - self.lower_bounds
-        self.homo_data = self.to_homogeneous_graph()
+        self.data = self.to_graph()
 
-    def to_homogeneous_graph(self):
-        """Convert to homogeneous graph for EGATNodeClassifier"""
+    def to_graph(self):
+
         # Combine all nodes with type encoding
         num_commodities = len(self.commodities)
         num_paths = len(self.paths)
@@ -23,13 +23,13 @@ class GATInstance(Instance):
 
         # Commodity features with type=0
         for comm in self.commodities:
-            feature = [comm.n_users, comm.c_od, np.mean(list(comm.c_p.values())), 0]  # Type indicator: 0 for commodity
+            feature = [comm.n_users, comm.c_od, np.mean(list(comm.c_p.values())), 0, 0, 1, 0.]  # Type indicator: 0 for commodity
             node_features.append(feature)
             node_types.append(0)
 
         # Path features with type=1
         for path in self.paths:
-            feature = [path.L_p, path.N_p, 0, 1]  # 0 = Padding to match dimension  # Type indicator: 1 for path
+            feature = [0, 0, 0, path.L_p, path.N_p, 0, 1.]  # 0 = Padding to match dimension  # Type indicator: 1 for path
             node_features.append(feature)
             node_types.append(1)
 
@@ -43,6 +43,8 @@ class GATInstance(Instance):
                 source = i  # commodity index
                 target = num_commodities + j  # path index (offset by num_commodities)
                 edge_indices.append([source, target])
+                edge_attrs.append([comm.c_p[path.name]] + [1.0, 0.0])
+                edge_indices.append([target, source])
                 edge_attrs.append([comm.c_p[path.name]] + [1.0, 0.0])
 
         # 2. path <-> path edges (free transfers)
@@ -64,11 +66,8 @@ class GATInstance(Instance):
         )
 
         # Normalise features
-        data.x[:, 0] /= self.MAX_N_USERS
-        data.x[:, 1] /= self.MAX_CR_FREE
-        data.x[:, 2] /= self.MAX_CR_TRANSFER
-
-        data.edge_attr[:, :2] /= self.MAX_CR_TRANSFER
+        torch.nn.functional.normalize(data.x, dim=0)
+        torch.nn.functional.normalize(data.edge_attr, dim=0)
 
         return data
 
@@ -95,7 +94,7 @@ class GATInstance(Instance):
 def create_batch(instances: List[GATInstance], device=torch.device('cpu')):
     """Create a batch of heterographs"""
 
-    hetero_data_list = [inst.homo_data for inst in instances]
+    hetero_data_list = [inst.graph for inst in instances]
     batch = Batch.from_data_list(hetero_data_list)
     if device.type == 'cuda':
         batch.to(device)

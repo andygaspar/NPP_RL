@@ -9,20 +9,9 @@ from SKPP.skpp_instance import SPKK_instance
 class SKKGraph(SPKK_instance):
     def __init__(self, M, K):
         super().__init__(M, K)
-        self.max_p = self.p.max()
-        self.graph = self.create_graph_from_problem()
+        self.data = self.to_graph()
 
-
-    def create_graph_from_problem(self):
-        """
-        Create a PyG graph from a Problem instance.
-
-        Args:
-            problem: Problem instance
-
-        Returns:
-            torch_geometric.data.Data object
-        """
+    def to_graph(self):
 
         # Node features
         # Item nodes (type 0): [value, type_encoding, 0]
@@ -32,16 +21,16 @@ class SKKGraph(SPKK_instance):
         # Create item node features
         item_features = []
         for i in range(self.M):
-            item_type = 0 if i < self.L else 1  # 0 for type A, 1 for type B
-            # Feature: [value, type_encoding, 0 for padding/indicating item node]
-            item_feature = [self.p[0, i], 0, item_type, 1 - item_type, 0]
+            item_type = 1 if i < self.L else 0  # 1 for type A, 0 for type B
+            # Feature: [value, *, one hot]
+            item_feature = [self.p[0, i], 0, 0, 1 - item_type, item_type]
             item_features.append(item_feature)
 
         # Create user node features
         user_features = []
         for k in range(self.K):
             # Feature: [capacity, 0 for padding, 1 for indicating user node]
-            user_feature = [0, self.c[k], 0, 0, 1]
+            user_feature = [0, self.c[k], 1, 0, 0]
             user_features.append(user_feature)
 
         # Concatenate all node features
@@ -68,11 +57,6 @@ class SKKGraph(SPKK_instance):
         # Make graph undirected (optional)
         edge_index, edge_attr = to_undirected(edge_index, edge_attr=edge_attr)
 
-        # # Node types (for convenience)
-        # node_type = torch.cat([
-        #     torch.zeros(self.M, dtype=torch.long),  # 0 for items
-        #     torch.ones(self.K, dtype=torch.long)  # 1 for users
-        # ])
 
         # Create PyG Data object
         data = Data(
@@ -91,42 +75,36 @@ class SKKGraph(SPKK_instance):
 
         return data
 
-def create_SKK_batch(instances, device=torch.device('cpu')):
-    """
-    Create a batch of graphs from multiple Problem instances.
+    def rescale_p(self, t: torch.Tensor) -> np.ndarray:
+        return np.ascontiguousarray(t.detach().to('cpu').numpy()) * self.max_p
 
-    Args:
-        problems: List of Problem instances
+    def eval_sample(self, sample_tensor: torch.Tensor, method):
+        p = self.rescale_p(sample_tensor)
+        if method == 'exact':
+            from SKPP.skpp_solver import SKPP_pop
+            skpp = SKPP_pop(self, pop_size=sample_tensor.shape[0])
+        else:
+            from SKPP.skpp_solver import SKPP_greedy_pop
+            skpp = SKPP_greedy_pop(self, pop_size=sample_tensor.shape[0])
+        return skpp.solve(p)
 
-    Returns:
-        torch_geometric.data.Batch object
-    """
-    data_list = [inst.graph for inst in instances]
+    def random_baseline(self, sample_size, method):
+        random_sol = np.random.uniform(0, self.max_p, (sample_size, self.L))
+        if method == 'exact':
+            from SKPP.skpp_solver import SKPP_pop
+            skpp = SKPP_pop(self, pop_size=sample_size)
+        else:
+            from SKPP.skpp_solver import SKPP_greedy_pop
+            skpp = SKPP_greedy_pop(self, pop_size=sample_size)
+        _, best_val = skpp.solve(random_sol)
+        return best_val
+
+
+def create_SKPP_batch(instances, device=torch.device('cpu')):
+    data_list = [inst.data for inst in instances]
     batch = Batch.from_data_list(data_list)
     if device.type == 'cuda':
         batch.to(device)
 
     return batch
-
-
-
-# Create multiple problems
-problems = [SKKGraph(M=4, K=3) for _ in range(3)]
-
-# Create batch of graphs
-# batch = SKKGraph.create_batch(problems)
-batch = create_SKK_batch(problems)
-
-print("Batch Information:")
-print(f"Number of graphs: {batch.num_graphs}")
-print(f"Total nodes: {batch.num_nodes}")
-print(f"Total edges: {batch.num_edges}")
-print(f"Node feature dim: {batch.num_node_features}")
-print(f"Edge feature dim: {batch.num_edge_features}")
-print(f"\nBatch attributes: {batch.keys}")
-
-# Access individual graph information
-print(f"\nFirst graph in batch:")
-print(f"  Items: {batch.num_items[0]}, Users: {batch.num_users[0]}")
-print(f"  Type A items: {batch.L[0]}")
 

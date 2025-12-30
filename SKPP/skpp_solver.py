@@ -5,12 +5,11 @@ import numpy as np
 from skpp_instance import SPKK_instance
 
 
-class MKP:
+class SKPP:
 
     def __init__(self, problem: SPKK_instance):
 
         self.model = gb.Model("BilevelReformulation")
-        # self.model.setParam('OutputFlag', 0)
 
         self.inst = problem
         self.p = problem.p
@@ -42,13 +41,15 @@ class MKP:
         backtrack(0, [], 0)
         return result
 
-    def solve(self):
+    def solve(self, verbose=False):
+        if not verbose:
+            self.model.setParam('OutputFlag', 0)
         combs = {}
         z = {}
         M = 10000
         N = 2000
-        p = self.model.addMVar(self.inst.L, vtype=GRB.BINARY)
-        t = self.model.addMVar((self.inst.K, self.inst.L), vtype=GRB.BINARY)
+        p = self.model.addMVar(self.inst.L)
+        t = self.model.addMVar((self.inst.K, self.inst.L))
         for k in range(self.inst.K):
             combs[k] = self.maximal_combinations_final(self.inst.w[k].tolist(), self.inst.c[k])
             z[k] = self.model.addMVar(len(combs[k]), vtype=GRB.BINARY)
@@ -58,12 +59,12 @@ class MKP:
             for c_idx, c in enumerate(combs[k]):
                 c_l = [i for i in c if i < self.inst.L]
                 c_f = [i for i in c if i >= self.inst.L]
-                for q in combs[k]:
+                for q_idx, q in enumerate(combs[k]):
                     q_l = [i for i in q if i < self.inst.L]
                     q_f = [i for i in q if i >= self.inst.L]
                     self.model.addConstr(
-                        self.p[0][c_f].sum() + t[c_l].sum() >=
-                        self.p[0][q_f].sum() + p[q_l].sum() - (1 - z[k][c_idx]) * M,
+                        self.p[k][c_f].sum() + t[k][c_l].sum() >=
+                        self.p[k][q_f].sum() + p[q_l].sum() - (1 - z[k][c_idx]) * M,
                         name = 'comb ' + str(c) + ' ' + str(q)
                     )
 
@@ -78,7 +79,7 @@ class MKP:
                 self.model.addConstr(t[k, i] <= p[i], name='t < p ' + str(k) + ' ' + str(i))
 
         self.model.setObjective(
-            ((self.p[:, :self.inst.L]) * self.x[:, :self.inst.L]).sum() - t.sum(), gb.GRB.MAXIMIZE
+            (self.p[:, :self.inst.L] * self.x[:, :self.inst.L]).sum() - t.sum(), gb.GRB.MAXIMIZE
         )
 
         self.model.optimize()
@@ -87,17 +88,10 @@ class MKP:
             for c in self.model.getConstrs():
                 if c.IISConstr: print(f'\t{c.constrname}: {self.model.getRow(c)} {c.Sense} {c.RHS}')
 
-        for k in range(self.inst.K):
-            print(self.x[k].x)
-            print(t[k].x)
-            for c_idx, c in enumerate(combs[k]):
-                if z[k][c_idx].x == 1:
-                    print(c)
-
         return self.model.objVal,  p.x
 
 
-class MKP_pop:
+class SKPP_pop:
 
     def __init__(self, problem: SPKK_instance, pop_size: int):
         self.model = gb.Model("BilevelReformulation")
@@ -123,11 +117,11 @@ class MKP_pop:
             (self.x * self.w).sum(axis=2) <= self.inst.c
         )
         self.model.optimize()
+        vals = ((self.p - p) * self.x.x)[:, :, :self.inst.L].sum(axis=-1).sum(axis=-1)
+        return vals, vals.max()
 
-        return ((self.p - p) * self.x.x)[:, :, :self.inst.L].sum(axis=-1).sum(axis=-1)
 
-
-class MKP_greedy_pop:
+class SKPP_greedy_pop:
     def __init__(self, problem: SPKK_instance, pop_size: int):
         self.inst = problem
         self.pop_size = pop_size
@@ -150,4 +144,5 @@ class MKP_greedy_pop:
         p = np.zeros_like(self.p)
         p[:, :, :self.inst.L] = self.p[:, :, :self.inst.L]
         p = np.take_along_axis(p, indices, axis=-1) * cap_used
-        return (p - p_zero).sum(axis=-1).sum(axis=-1)
+        vals = (p - p_zero).sum(axis=-1).sum(axis=-1)
+        return vals, vals.max()
