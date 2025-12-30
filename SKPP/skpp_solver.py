@@ -10,7 +10,6 @@ class MKP:
     def __init__(self, problem: SPKK_instance):
 
         self.model = gb.Model("BilevelReformulation")
-        self.model.setParam('OutputFlag', 0)
 
         self.inst = problem
         self.p = problem.p
@@ -42,7 +41,9 @@ class MKP:
         backtrack(0, [], 0)
         return result
 
-    def solve(self):
+    def solve(self, verbose=False):
+        if not verbose:
+            self.model.setParam('OutputFlag', 0)
         combs = {}
         z = {}
         M = 10000

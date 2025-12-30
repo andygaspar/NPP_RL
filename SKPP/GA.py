@@ -19,6 +19,7 @@ class GA_MBK:
         self.generations = generations
         self.solver = MKP_pop(self.instance, self.off_size) if method == "exact" else MKP_greedy_pop(self.instance, self.off_size)
         self.best_fitness = None
+        self.best_solution = None
         self.avg_fitness = None
 
     def solve(self):
@@ -44,9 +45,11 @@ class GA_MBK:
 
                 # Add small mutation (5% chance per gene)
                 mutation_mask = np.random.random(self.population.shape[1]) < 0.02
-                mutation_values = np.random.uniform(0, self.instance.p[0, : self.instance.L], self.population.shape[1])
+                percentage = self.instance.p[0, : self.instance.L] * 0.05
+                delta = np.random.uniform(-percentage, percentage)
+                mutation_values = self.population[indices[self.pop_size + i]] + delta
                 self.population[indices[self.pop_size + i]][mutation_mask] += mutation_values[mutation_mask]
-                # self.population[indices[self.pop_size + i]] = np.clip(self.population[indices[self.pop_size + i]], 0, 100)  # Keep within bounds
+                self.population[indices[self.pop_size + i]] = np.clip(self.population[indices[self.pop_size + i]], 0, self.population[indices[self.pop_size + i]])  # Keep within bounds
 
             self.fitness[indices[self.pop_size:]] = self.solver.solve(self.population[indices[self.pop_size:]])
             indices = np.argsort(self.fitness)[::-1]
@@ -57,5 +60,6 @@ class GA_MBK:
             if gen % 50 == 0 or gen == self.generations - 1:
                 print(f"Gen {gen}: Best={self.best_fitness:.2f}, Avg={self.avg_fitness:.2f}")
 
+        self.best_solution = self.population[indices[0]]
 
 

@@ -12,7 +12,8 @@ pb = generate_instance(10, 10)
 
 t = time.time()
 mpk = MKP(pb)
-obj, sol = mpk.solve()
+obj, sol = mpk.solve(verbose = False)
+print(sol)
 sol = np.array([sol])
 mpk_pop = MKP_pop(pb,1)
 val = mpk_pop.solve(sol)
@@ -35,5 +36,6 @@ t = time.time()
 ga = GA_MBK(pb, pop_size, generations, method)
 ga.solve()
 print('time', time.time() - t)
+print(ga.best_solution)
 
 

@@ -34,7 +34,7 @@ POPULATION = N_SAMPLES
 
 lr = 0.001
 wd = 0.0001
-agent = EGAT(4, 3, HIDDEN, 2, lr=lr, wd=wd, device=device)
+agent = EGAT(7, 3, HIDDEN, 2, lr=lr, wd=wd, device=device)
 
 BEST_GAP = 0
 t = time.time()

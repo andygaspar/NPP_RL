@@ -24,11 +24,9 @@ class SPKK_instance:
         return 'M:' + str(self.M) + '-K:' + str(self.K)
 
     def generate(self):
-        self.w = np.random.randint(1, 100, size=(self.K, self.M))
+        self.w = np.random.uniform(1, 100, size=(self.K, self.M))
         self.c = self.w.sum(axis=1)//4
         self.p = self.w + 10
-        # p = np.stack((self.p[0, : self.L],) * self.K)
-        # self.p[:, :self.L] = p
 
 
 def generate_instance(M, K):
