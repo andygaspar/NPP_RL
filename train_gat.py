@@ -14,7 +14,7 @@ device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 print('Experiments running on', device)
 
 
-MIN_SIZE, MAX_SIZE = 10, 30
+MIN_SIZE, MAX_SIZE = 20, 30
 
 
 file_name = 'NET/test_' + str(MIN_SIZE) + '_' + str(MAX_SIZE) + '.pth'
