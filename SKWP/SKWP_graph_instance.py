@@ -3,10 +3,10 @@ import torch
 from torch_geometric.data import Data, Batch
 from torch_geometric.utils import to_undirected
 
-from SKPP.skpp_instance import SKPP_instance
+from SKWP.skwp_instance import SKWP_instance
 
 
-class SKPPGraph(SKPP_instance):
+class SKWPGraph(SKWP_instance):
     def __init__(self, M, K):
         super().__init__(M, K)
         self.data = self.to_graph()
@@ -23,7 +23,7 @@ class SKPPGraph(SKPP_instance):
         for i in range(self.M):
             item_type = 1 if i < self.L else 0  # 1 for type A, 0 for type B
             # Feature: [value, *, one hot]
-            item_feature = [self.p[:, i].mean(), self.w[:, i].mean(), 0, 0, 1 - item_type, item_type]
+            item_feature = [self.p[:, i].mean(), self.w[:, i].mean() * (1 - item_type), 0, 0, 1 - item_type, item_type]
             item_features.append(item_feature)
 
         # Create user node features
@@ -48,7 +48,7 @@ class SKPPGraph(SKPP_instance):
 
                 # Edge feature: [weight, item_type]
                 item_type = 0 if i < self.L else 1
-                edge_feature = [self.w[k, i], self.p[k, i], item_type, 1 - item_type]
+                edge_feature = [self.w[k, i] * item_type, self.p[k, i], item_type, 1 - item_type]
                 edge_features.append(edge_feature)
 
         edge_index = torch.tensor(edge_indices, dtype=torch.long).t().contiguous()
@@ -69,35 +69,35 @@ class SKPPGraph(SKPP_instance):
             L=self.L,  # Number of type A items
         )
 
-        data.x[:, 0] /= self.max_p
+        data.x[:, 0] /= self.p.max()
         data.x[:, 1] /= self.c.max()
         data.edge_attr[:, 0] /= self.w.max()
 
         return data
 
-    def rescale_p(self, t: torch.Tensor) -> np.ndarray:
-        return np.ascontiguousarray(t.detach().to('cpu').numpy()) * self.max_p
+    def rescale_w(self, t: torch.Tensor) -> np.ndarray:
+        return np.ascontiguousarray(t.detach().to('cpu').numpy()) * self.max_w
 
     def eval_sample(self, sample_tensor: torch.Tensor):
-        p = self.rescale_p(sample_tensor)
+        w = self.rescale_w(sample_tensor)
         from KP_Solver.knap_cpp import KnapCpp
         bb = KnapCpp(self, pop_size=sample_tensor.shape[0])
-        return bb.solve_skpp(p)
+        return bb.solve_skwp(w)
 
-    def eval(self, p: torch.Tensor):
-        p = torch.stack([p] * 2)
-        _, val = self.eval_sample(p)
+    def eval(self, w: torch.Tensor):
+        w = torch.stack([w] * 2)
+        _, val = self.eval_sample(w)
         return val
 
     def random_baseline(self, sample_size):
-        random_sol = np.random.uniform(0, self.max_p, (sample_size, self.L))
+        random_sol = np.random.uniform(0, self.max_w, (sample_size, self.L))
         from KP_Solver.knap_cpp import KnapCpp
         bb = KnapCpp(self, pop_size=sample_size)
-        _, max_val = bb.solve_skpp(random_sol)
+        _, max_val = bb.solve_skwp(random_sol)
         return max_val
 
 
-def create_SKPP_batch(instances, device=torch.device('cpu')):
+def create_SKWP_batch(instances, device=torch.device('cpu')):
     data_list = [inst.data for inst in instances]
     batch = Batch.from_data_list(data_list)
     if device.type == 'cuda':

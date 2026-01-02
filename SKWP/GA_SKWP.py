@@ -3,13 +3,12 @@ import time
 import numpy as np
 
 from KP_Solver.knap_cpp import KnapCpp
-from SKPP.skpp_solver import SKPP_pop, SKPP_greedy_pop
-from SKPP.skpp_instance import SKPP_instance
+from SKWP.skwp_instance import SKWP_instance
 
 
 
-class GA_SKPP:
-    def __init__(self, instance: SKPP_instance, pop_size):
+class GA_SKWP:
+    def __init__(self, instance: SKWP_instance, pop_size):
 
         self.instance = instance
         self.pop_size = pop_size
@@ -24,12 +23,12 @@ class GA_SKPP:
 
     def run(self, iterations, init_population=None, verbose=False):
         if init_population is None:
-            self.population = np.random.uniform(0, self.instance.p[0, : self.instance.L], size=(self.pop_size + self.off_size, self.instance.L))
+            self.population = np.random.uniform(0, self.instance.w[0, : self.instance.L], size=(self.pop_size + self.off_size, self.instance.L))
         else:
             self.population = init_population
         self.time = time.time()
-        self.fitness[:self.off_size], _ = self.solver.solve_skpp(self.population[:self.off_size])
-        self.fitness[self.off_size: self.off_size * 2], _ = self.solver.solve_skpp(self.population[self.off_size: self.off_size * 2])
+        self.fitness[:self.off_size], _ = self.solver.solve_skwp(self.population[:self.off_size])
+        self.fitness[self.off_size: self.off_size * 2], _ = self.solver.solve_skwp(self.population[self.off_size: self.off_size * 2])
 
         # Sort indices by fitness (descending)
         indices = np.argsort(self.fitness)[::-1]
@@ -50,14 +49,14 @@ class GA_SKPP:
 
                 # Add small mutation (5% chance per gene)
                 mutation_mask = np.random.random(self.population.shape[1]) < 0.02
-                percentage = self.instance.max_p * 0.05
+                percentage = self.instance.max_w * 0.05
                 delta = np.random.uniform(-percentage, percentage, size=self.population.shape[1])
                 mutation_values = self.population[indices[self.pop_size + i]] + delta
                 self.population[indices[self.pop_size + i]][mutation_mask] += mutation_values[mutation_mask]
                 self.population[indices[self.pop_size + i]] = (
-                    np.clip(self.population[indices[self.pop_size + i]], 0, self.instance.max_p))  # Keep within bounds
+                    np.clip(self.population[indices[self.pop_size + i]], 0, self.instance.max_w))  # Keep within bounds
 
-            self.fitness[indices[self.pop_size:]], _ = self.solver.solve_skpp(self.population[indices[self.pop_size:]])
+            self.fitness[indices[self.pop_size:]], _ = self.solver.solve_skwp(self.population[indices[self.pop_size:]])
             indices = np.argsort(self.fitness)[::-1]
 
             # Print progress

@@ -230,7 +230,9 @@ class Genetic {
 
         }
 
-
+    void eval(double* init_pop) {
+        init_population(init_pop);
+    }
 
     void run(double* init_pop, int iterations){
         init_population(init_pop);

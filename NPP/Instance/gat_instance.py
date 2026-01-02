@@ -1,7 +1,7 @@
 from typing import List
 import torch
-from Instance.instance import Instance
-from torch_geometric.data import HeteroData, Data, Batch
+from NPP.Instance.instance import Instance
+from torch_geometric.data import Data, Batch
 import numpy as np
 
 
@@ -78,14 +78,21 @@ class GATInstance(Instance):
         return lb + prices * ub_minus_lb
 
     def eval_sample(self, sample_tensor: torch.Tensor):
-        from Solver.genetic_solver import Genetic
+        from NPP.Solver.genetic_solver import Genetic
         g = Genetic(self, pop_size=sample_tensor.shape[0], verbose=False)
-        g.run(1, init_population=self.rescale_prices(sample_tensor))
+        g.eval(init_population=self.rescale_prices(sample_tensor))
         return g.final_vals, g.best_val
+
+    def eval(self, prices: torch.Tensor):
+        prices = torch.stack([prices]*2)
+        _, val = self.eval_sample(prices)
+        return val
+
+
 
     def random_baseline(self, sample_size):
         random_sol = np.random.uniform(self.lower_bounds, self.upper_bounds, (sample_size, self.n_paths))
-        from Solver.genetic_solver import Genetic
+        from NPP.Solver.genetic_solver import Genetic
         g = Genetic(self, pop_size=sample_size, verbose=False)
         g.run(1, init_population=random_sol)
         return g.best_val

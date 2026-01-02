@@ -1,12 +1,12 @@
-import random
 import time
 
 import numpy as np
 import torch
 
-from Instance.gat_instance import create_batch, GATInstance
-from Solver.genetic_solver import Genetic
-from gat import EGAT
+from SKWP.GA_SKWP import GA_SKWP
+from SKWP.SKWP_graph_instance import create_SKWP_batch, SKWPGraph
+from GAT.gat import EGAT
+
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 # device = torch.device('cpu')
@@ -16,11 +16,11 @@ print('Experiments running on', device)
 
 MIN_SIZE, MAX_SIZE = 15, 30
 
+SAVE = False
+file_name = 'SKWP/NET/test_' + str(MIN_SIZE) + '_' + str(MAX_SIZE) + '.pth'
 
-file_name = 'NET/test_' + str(MIN_SIZE) + '_' + str(MAX_SIZE) + '.pth'
-
-N_COMM = range(MIN_SIZE, MAX_SIZE)
-N_PATHS = range(MIN_SIZE, MAX_SIZE)
+M = range(MIN_SIZE, MAX_SIZE)
+K = range(MIN_SIZE, MAX_SIZE)
 SEED = 1
 
 HIDDEN = 64
@@ -29,39 +29,40 @@ N_SAMPLES = 128
 ITERATIONS = 3000
 EPISODE_PER_BATCH = 128
 
-BASELINE_ITERATIONS = 1000
+BASELINE_ITERATIONS = 10
 POPULATION = N_SAMPLES
 
 lr = 0.001
 wd = 0.0001
-agent = EGAT(7, 3, HIDDEN, 2, lr=lr, wd=wd, device=device)
+agent = EGAT(6, 4, HIDDEN, 2, lr=lr, wd=wd, device=device)
 
 BEST_GAP = 0
 t = time.time()
 
+
 for iteration in range(ITERATIONS):
-    instances = [GATInstance(np.random.choice(N_PATHS), np.random.choice(N_COMM), seed=i) for i in range(EPISODE_PER_BATCH)]
+    instances = [SKWPGraph(np.random.choice(M), np.random.choice(K)) for _ in range(EPISODE_PER_BATCH)]
 
-    batch = create_batch(instances, device=device)
+    batch = create_SKWP_batch(instances, device=device)
 
-    samples, log_probs = agent(batch, N_SAMPLES)
+    samples, log_probs, _ = agent(batch, N_SAMPLES)
 
     rewards, baselines, log_prices = [], [], []
     wins, gaps = 0, []
     rand_wins, rand_gaps = 0, []
 
     for i, inst in enumerate(instances):
-        mask = (batch.batch == i) * (batch.x[:, -1] == 1) # get only paths (i.e. x[:, -1 == 1) of the batch
+        mask = (batch.batch == i) * (batch.x[:, -1] == 1) # get only p controlled by the leader (i.e. x[:, -1 == 1) of the batch
         inst_sample_tensor = samples[:, mask]
         log_prices.append(log_probs[:, mask].flatten())
 
-        g = Genetic(inst, pop_size=POPULATION, verbose=False)
+        g = GA_SKWP(inst, pop_size=POPULATION)
         g.run(BASELINE_ITERATIONS)
-        baselines += [g.best_val for _ in range(inst.n_paths * N_SAMPLES)]
+        baselines += [g.best_val for _ in range(inst.L * N_SAMPLES)]
 
-        # rewards.append([g_nn.best_val for _ in range(inst.n_paths * N_SAMPLES)])
+        # rewards.append([g_nn.best_val for _ in range(inst.L * N_SAMPLES)])
         vals, agent_best_val = inst.eval_sample(inst_sample_tensor)
-        rewards += np.repeat(vals, inst.n_paths).tolist()
+        rewards += np.repeat(vals, inst.L).tolist()
 
         random_best_val = inst.random_baseline(N_SAMPLES)
 
@@ -72,7 +73,8 @@ for iteration in range(ITERATIONS):
 
     if iteration > 50 and BEST_GAP < np.mean(gaps):
         agent.best_gap = np.mean(gaps)
-        agent.save(file_name, )
+        if SAVE:
+            agent.save(file_name, )
         BEST_GAP = agent.best_gap
         print(f"saved check point. Avg gap : {agent.best_gap: .3f}")
 
@@ -93,4 +95,4 @@ for iteration in range(ITERATIONS):
               f"rand avg gap: {np.mean(rand_gaps) :.3f} | "
               )
 
-agent.save('NET/test.pth')
+agent.save('SKK/NET/test.pth')

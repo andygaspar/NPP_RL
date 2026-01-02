@@ -1,11 +1,9 @@
 import torch
-from Instance.instance import Instance
+from NPP.Instance.instance import Instance
 import torch.nn as nn
 import torch.nn.functional as F
 from torch_geometric.nn import GATv2Conv
-from torch_geometric.data import HeteroData, Data, Batch
-import networkx as nx
-import matplotlib.pyplot as plt
+from torch_geometric.data import HeteroData
 import numpy as np
 
 

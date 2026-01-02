@@ -2,14 +2,13 @@ import time
 
 import numpy as np
 import pandas as pd
-from Instance.gat_instance import GATInstance
-from Solver.genetic_solver import Genetic
-from Solver.solver import GlobalSolver
-from gat import load_agent
+from NPP.Instance.gat_instance import GATInstance
+from NPP.Solver.genetic_solver import Genetic
+from GAT.gat import load_agent
 
-file_name = 'NET/test_20_30.pth'
+file_name = 'NPP/NET/test_15_25.pth'
 
-df_exact = pd.read_csv('Results/exact_results.csv')
+df_exact = pd.read_csv('NPP/Results/exact_results.csv')
 
 agent = load_agent(file_name)
 device = agent.device
@@ -27,7 +26,7 @@ N_RUNS = 10
 
 
 columns = ['run', 'commodities', 'paths',
-           'obj_exact', 'obj_nn_ga', 'obj_nn', 'obj_ga',
+           'obj_exact', 'obj_nn_ga', 'obj_nn_sample', 'obj_ga',
            'mip_GAP', 'status',
            'time_exact', 'time_nn_ga','time_nn', 'time_ga', 'case_num']
 
@@ -46,7 +45,8 @@ for case in CASES:
         net_time = time.time()
         samples = agent.get_distribution(instance, POPULATION)
 
-        _, net_best = instance.eval_sample(samples)
+        _, net_best_sample = instance.eval_sample(samples)
+        mean_val = instance.eval(agent.get_mean(instance))
 
         net_time = time.time() - net_time
         ga_nn.run(BASELINE_ITERATIONS, init_population=instance.rescale_prices(samples))
@@ -57,19 +57,19 @@ for case in CASES:
         # solver.solve()
         # exact_gaps += [ga_nn.best_val / solver.obj]
         # df.loc[df.shape[0]] = [run, comm, paths,
-        #                        solver.obj, ga_nn.best_val, net_best, ga.best_val,
+        #                        solver.obj, ga_nn.best_val, net_best_sample, mean_val, ga.best_val,
         #                        solver.final_gap, solver.m.status,
         #                        solver.time, ga_nn.time + net_time, net_time, ga.time, case_num]
 
         solver = df_exact[(df_exact.case_num == case_num[case]) & (df_exact.run == run)].iloc[0]
         exact_gaps += [ga_nn.best_val / solver.obj_exact]
         df.loc[df.shape[0]] = [run, comm, paths,
-                               solver.obj_exact, ga_nn.best_val, net_best, ga.best_val,
+                               solver.obj_exact, ga_nn.best_val, net_best_sample, mean_val, ga.best_val,
                                solver.mip_GAP, solver.status,
                                solver.time_exact, ga_nn.time + net_time, net_time, ga.time, case_num[case]]
 
     print(paths, comm, wins / N_RUNS, np.mean(gaps), np.mean(exact_gaps))
-    df.to_csv('Results/test_.csv')
+    df.to_csv('NPP/Results/test_.csv')
 
 
 #

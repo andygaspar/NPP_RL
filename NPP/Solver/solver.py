@@ -2,7 +2,7 @@ import time
 
 import numpy as np
 
-from Instance.instance import Instance, Commodity
+from NPP.Instance.instance import Instance, Commodity
 from gurobipy import Model, GRB, quicksum
 
 

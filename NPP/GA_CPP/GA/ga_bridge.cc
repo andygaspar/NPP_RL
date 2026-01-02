@@ -16,6 +16,7 @@ extern "C" {
     double get_gen_best_val_(Genetic* g) {return g -> get_best_val();}
     double* get_population_ (Genetic* g) {return g -> get_population();}
     double* get_vals_ (Genetic* g) {return g-> get_vals();}
+    double* eval_(Genetic* g, double* population) {g -> eval(population); return g-> get_vals();}
     void destroy(Genetic* g) {delete g;}
 
 }
