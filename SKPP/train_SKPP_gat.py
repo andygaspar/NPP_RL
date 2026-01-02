@@ -19,7 +19,7 @@ print('Experiments running on', device)
 
 MIN_SIZE, MAX_SIZE = 10, 30
 
-SAVE = False
+SAVE = True
 file_name = 'SKPP/NET/test_' + str(MIN_SIZE) + '_' + str(MAX_SIZE) + '.pth'
 
 M = range(MIN_SIZE, MAX_SIZE)
@@ -30,11 +30,11 @@ HIDDEN = 64
 
 N_SAMPLES = 128
 ITERATIONS = 3000
-EPISODE_PER_BATCH = 128
+EPISODE_PER_BATCH = 8
 
-BASELINE_ITERATIONS = 20
+BASELINE_ITERATIONS = 10
 POPULATION = N_SAMPLES
-METHOD = 'greedy'
+METHOD = 'exact' #greedy
 
 lr = 0.001
 wd = 0.0001
@@ -75,6 +75,8 @@ for iteration in range(ITERATIONS):
         rand_wins += random_best_val < agent_best_val
         rand_gaps += [agent_best_val/random_best_val if random_best_val > 0 else 0]
 
+        print(iteration, i)
+
     if iteration > 50 and BEST_GAP < np.mean(gaps):
         agent.best_gap = np.mean(gaps)
         if SAVE:
@@ -88,7 +90,7 @@ for iteration in range(ITERATIONS):
 
     loss = agent.train_policy(log_prices, reward_tensor, baseline_tensor)
 
-    if iteration % 2 == 0:
+    if iteration % 10 == 0:
         max_agent = reward_tensor.max().item()
         print(f"E{iteration:4d} | " 
               f"Train time {time.time() - t:.1f} || " 
