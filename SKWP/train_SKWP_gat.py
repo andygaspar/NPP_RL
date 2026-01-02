@@ -3,8 +3,8 @@ import time
 import numpy as np
 import torch
 
-from SKPP.GA_SKPP import GA_SKPP
-from SKPP.SKPP_graph_instance import create_SKPP_batch, SKPPGraph
+from SKWP.GA_SKWP import GA_SKWP
+from SKWP.SKWP_graph_instance import create_SKWP_batch, SKWPGraph
 from GAT.gat import EGAT
 
 
@@ -17,7 +17,7 @@ print('Experiments running on', device)
 MIN_SIZE, MAX_SIZE = 15, 30
 
 SAVE = False
-file_name = 'SKPP/NET/test_' + str(MIN_SIZE) + '_' + str(MAX_SIZE) + '.pth'
+file_name = 'SKWP/NET/test_' + str(MIN_SIZE) + '_' + str(MAX_SIZE) + '.pth'
 
 M = range(MIN_SIZE, MAX_SIZE)
 K = range(MIN_SIZE, MAX_SIZE)
@@ -41,11 +41,11 @@ t = time.time()
 
 
 for iteration in range(ITERATIONS):
-    instances = [SKPPGraph(np.random.choice(M), np.random.choice(K)) for _ in range(EPISODE_PER_BATCH)]
+    instances = [SKWPGraph(np.random.choice(M), np.random.choice(K)) for _ in range(EPISODE_PER_BATCH)]
 
-    batch = create_SKPP_batch(instances, device=device)
+    batch = create_SKWP_batch(instances, device=device)
 
-    samples, log_probs = agent(batch, N_SAMPLES)
+    samples, log_probs, _ = agent(batch, N_SAMPLES)
 
     rewards, baselines, log_prices = [], [], []
     wins, gaps = 0, []
@@ -56,7 +56,7 @@ for iteration in range(ITERATIONS):
         inst_sample_tensor = samples[:, mask]
         log_prices.append(log_probs[:, mask].flatten())
 
-        g = GA_SKPP(inst, pop_size=POPULATION)
+        g = GA_SKWP(inst, pop_size=POPULATION)
         g.run(BASELINE_ITERATIONS)
         baselines += [g.best_val for _ in range(inst.L * N_SAMPLES)]
 

@@ -33,21 +33,36 @@ class KnapCpp:
 
         self.lib.free_result.argtypes = [ctypes.POINTER(Result)]
 
+    def solve(self, p, w, c):
+        p = np.ascontiguousarray(p, dtype=np.float64)
+        w = np.ascontiguousarray(w, dtype=np.float64)
+        c = np.ascontiguousarray(c, dtype=np.float64)
+        return self.lib.knapsack_(p.ctypes.data_as(ctypes.POINTER(ctypes.c_double)),
+                                  w.ctypes.data_as(ctypes.POINTER(ctypes.c_double)),
+                                  c.ctypes.data_as(ctypes.POINTER(ctypes.c_double)),
+                                  ctypes.c_int(self.M), ctypes.c_int(self.K), ctypes.c_int(self.pop_size),
+                                  ctypes.c_int(self.numProcs))
 
-    def solve_cpp(self, p_new):
+    def solve_skpp(self, p_new):
         p_new = np.stack((p_new,) * self.K, axis=1)
         p = self.p.copy()
         p[:, :, :self.L] = p_new
-        p = np.ascontiguousarray(p, dtype=np.float64)
-        w = np.ascontiguousarray(self.w, dtype=np.float64)
-        c = np.ascontiguousarray(self.c, dtype=np.float64)
-        res = self.lib.knapsack_(p.ctypes.data_as(ctypes.POINTER(ctypes.c_double)),
-                                         w.ctypes.data_as(ctypes.POINTER(ctypes.c_double)),
-                                         c.ctypes.data_as(ctypes.POINTER(ctypes.c_double)),
-                                         ctypes.c_int(self.M), ctypes.c_int(self.K), ctypes.c_int(self.pop_size), ctypes.c_int(self.numProcs))
 
+        res = self.solve(p, self.w, self.c)
         sol = np.ctypeslib.as_array(res.contents.solution, shape=(self.pop_size, self.K, self.M))
 
         vals = ((self.p - p) * sol)[:, :, :self.L].sum(axis=-1).sum(axis=-1)
+        self.lib.free_result(res)
+        return vals, vals.max()
+
+    def solve_skwp(self, w_new):
+        w_new = np.stack((w_new,) * self.K, axis=1)
+        w = self.w.copy()
+        w[:, :, :self.L] = w_new
+
+        res = self.solve(self.p, w, self.c)
+        sol = np.ctypeslib.as_array(res.contents.solution, shape=(self.pop_size, self.K, self.M))
+
+        vals = (w * sol)[:, :, :self.L].sum(axis=-1).sum(axis=-1)
         self.lib.free_result(res)
         return vals, vals.max()

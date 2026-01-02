@@ -5,12 +5,12 @@ from gurobipy import GRB
 import numpy as np
 from scipy._lib.cobyqa import problem
 
-from skpp_instance import SPKK_instance
+from SKPP.skpp_instance import SKPP_instance
 
 
 class SKPP:
 
-    def __init__(self, problem: SPKK_instance):
+    def __init__(self, problem: SKPP_instance):
 
         self.model = gb.Model("BilevelReformulation")
 
@@ -104,7 +104,7 @@ class SKPP:
 
 class SKPP_pop:
 
-    def __init__(self, problem: SPKK_instance, pop_size: int, preset=True):
+    def __init__(self, problem: SKPP_instance, pop_size: int, preset=True):
         self.model = gb.Model("BilevelReformulation")
         self.model.setParam('OutputFlag', 0)
         self.preset = preset
@@ -166,7 +166,7 @@ class SKPP_pop:
 
 
 class SKPP_greedy_pop:
-    def __init__(self, problem: SPKK_instance, pop_size: int):
+    def __init__(self, problem: SKPP_instance, pop_size: int):
         self.inst = problem
         self.pop_size = pop_size
         self.p = np.array([problem.p for _ in range(self.pop_size)], dtype=float)

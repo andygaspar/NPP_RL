@@ -2,12 +2,12 @@ import time
 
 import numpy as np
 import pandas as pd
-from SKPP.SKPP_graph_instance import SKPPGraph
-from SKPP.GA_SKPP import GA_SKPP
+from SKWP.SKWP_graph_instance import SKWPGraph
+from SKWP.GA_SKWP import GA_SKWP
 from GAT.gat import load_agent
-from SKPP.skpp_solver import SKPP
+from SKWP.skwp_solver import SKWP
 
-file_name = 'SKPP/NET/test_15_25.pth'
+file_name = 'SKWP/NET/test_15_25.pth'
 # df_exact = pd.read_csv('NPP/Results/exact_results.csv')
 
 agent = load_agent(file_name)
@@ -37,12 +37,12 @@ for case in CASES:
     wins, gaps, exact_gaps = 0, [], []
     for run in range(N_RUNS):
         np.random.seed(run)
-        instance = SKPPGraph(paths, comm)
+        instance = SKWPGraph(paths, comm)
 
-        ga = GA_SKPP(instance, pop_size=POPULATION)
+        ga = GA_SKWP(instance, pop_size=POPULATION)
         ga.run(BASELINE_ITERATIONS)
 
-        ga_nn = GA_SKPP(instance, pop_size=POPULATION)
+        ga_nn = GA_SKWP(instance, pop_size=POPULATION)
         net_time = time.time()
         samples = agent.get_distribution(instance, POPULATION)
 
@@ -55,7 +55,7 @@ for case in CASES:
         wins += ga.best_val <= ga_nn.best_val
         gaps += [ga_nn.best_val / ga.best_val] if ga.best_val > 0 else ([-1] if ga_nn.best_val > 0 else [-2])
 
-        solver = SKPP(instance)
+        solver = SKWP(instance)
         obj, sol = solver.solve(verbose = False)
 
         exact_gaps += [ga_nn.best_val / solver.obj]
@@ -72,22 +72,6 @@ for case in CASES:
         #                        solver.time_exact, ga_nn.time + net_time, net_time, ga.time, case_num[case]]
 
     print(paths, comm, wins / N_RUNS, np.mean(gaps), np.mean(exact_gaps))
-    df.to_csv('SKPP/Results/test_.csv')
+    df.to_csv('SKWP/Results/test_.csv')
 
 
-#
-# import pandas as pd
-#
-# df_1 = pd.read_csv('Results/test_450.csv')
-# df_2 = pd.read_csv('Results/test.csv')
-#
-# df = pd.concat([df_1, df_2])
-#
-#
-# df.columns
-#
-#
-# df_exact = df[['run', 'commodities', 'paths', 'obj_exact', 'mip_GAP', 'status', 'time_exact', 'case_num']].copy()
-# df_exact.case_num = df_exact.apply(lambda row: case_num[(int(row.commodities), int(row.paths))], axis=1)
-#
-# df_exact.to_csv('Results/exact_results.csv', index=False)
