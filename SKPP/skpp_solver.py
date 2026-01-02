@@ -94,15 +94,25 @@ class SKPP:
 
 class SKPP_pop:
 
-    def __init__(self, problem: SPKK_instance, pop_size: int):
+    def __init__(self, problem: SPKK_instance, pop_size: int, preset=True):
         self.model = gb.Model("BilevelReformulation")
         self.model.setParam('OutputFlag', 0)
+        self.preset = preset
+        if preset:
+        #
+            self.model.setParam('Presolve', 2)  # Aggressive presolve
+        # #     self.model.setParam('MIPFocus', 1)  # Focus on finding feasible solutions
+        #     self.model.setParam('Heuristics', 0.8)  # More heuristics
+            self.model.setParam('Cuts', 0)  # Moderate cut generation
         self.inst = problem
         self.pop_size = pop_size
         self.p = np.array([problem.p for _ in range(self.pop_size)], dtype=float)
         self.c = np.stack((self.inst.c,) * pop_size)
         self.w = np.array([self.inst.w for _ in range(self.pop_size)])
         self.x = self.model.addMVar((pop_size, self.inst.K, self.inst.M), vtype=GRB.BINARY)
+        self.efficiency = np.zeros_like(self.w)
+        self.reindex_mat = np.stack((np.stack((range(self.inst.M),) * self.inst.K),) * self.pop_size)
+
         self.eps = 1e-6
 
     def solve(self, p_new):
@@ -112,15 +122,37 @@ class SKPP_pop:
         p = self.p.copy()
         p[:, :, :self.inst.L] = p_new
 
+        if self.preset:
+            self.x.Start = self.solve_x(p_new)
+            self.x.BranchPriority = self.efficiency.astype(int)
+
         self.model.setObjective((p * self.x).sum() + ((self.p - p) * self.x)[:, :, :self.inst.L].sum() * self.eps
                                 , GRB.MAXIMIZE)
         self.model.addConstr(
             (self.x * self.w).sum(axis=2) <= self.inst.c
         )
         self.model.optimize()
-        print((p* self.x.x).sum(axis=-1))
+        # print(self.x.x)
+        # print('ppp', self.model.ObjVal)
         vals = ((self.p - p) * self.x.x)[:, :, :self.inst.L].sum(axis=-1).sum(axis=-1)
         return vals, vals.max()
+
+    def solve_x(self, p_new):
+        p = self.p.copy()
+        self.efficiency = p / self.w
+        indices = np.argsort(-self.efficiency, axis=-1)
+        inverse_indices = np.argsort(indices, axis=-1)
+        w_sorted = np.take_along_axis(self.w, indices, axis=-1)
+        x_sorted = np.zeros_like(p, dtype=bool)
+        x_sorted[:, :, 0] = True
+        cap_used = w_sorted[:, :, 0]
+        for i in range(1, self.inst.M):
+            new_cap = cap_used + w_sorted[:, :, i]
+            x_sorted[:, :, i] = (new_cap <= self.c)
+            cap_used += w_sorted[:, :, i] * x_sorted[:, :, i]
+
+        x = np.take_along_axis(x_sorted, inverse_indices, axis=-1)
+        return x
 
 
 class SKPP_greedy_pop:
@@ -151,7 +183,9 @@ class SKPP_greedy_pop:
 
         x = np.take_along_axis(x_sorted, inverse_indices, axis=-1)[:, :, :self.inst.L]
         vals = ((self.p[:, :, :self.inst.L] - p_new) * x).sum(axis=-1).sum(axis=-1)
-        print((p * np.take_along_axis(x_sorted, inverse_indices, axis=-1)).sum(axis=-1) )
+        # print((p * np.take_along_axis(x_sorted, inverse_indices, axis=-1)).sum(axis=-1) )
         return vals, vals.max()
+
+
 
 

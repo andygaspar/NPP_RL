@@ -1,29 +1,27 @@
 import numpy as np
 
+from KP_Solver.knap_cpp import KnapCpp
 from SKPP.skpp_solver import SKPP_pop, SKPP_greedy_pop
 from SKPP.skpp_instance import SPKK_instance
 
-'''
-methods: 'exact', 'greedy'
-'''
 
 
 class GA_SKPP:
-    def __init__(self, instance: SPKK_instance, pop_size, method='exact'):
+    def __init__(self, instance: SPKK_instance, pop_size):
 
         self.instance = instance
         self.pop_size = pop_size
         self.off_size = pop_size // 2
         self.population = np.random.uniform(0, instance.p[0, : instance.L], size=(self.pop_size + self.off_size, instance.L))
         self.fitness = np.ones(self.pop_size + self.off_size) * (-1e4)
-        self.solver = SKPP_pop(self.instance, self.off_size) if method == "exact" else SKPP_greedy_pop(self.instance, self.off_size)
+        self.solver = KnapCpp(self.instance, pop_size=self.off_size)
         self.best_val = None
         self.best_solution = None
         self.avg_fitness = None
 
     def run(self, iterations, verbose=False):
-        self.fitness[:self.off_size], _ = self.solver.solve(self.population[:self.off_size])
-        self.fitness[self.off_size: self.off_size * 2], _ = self.solver.solve(self.population[self.off_size: self.off_size * 2])
+        self.fitness[:self.off_size], _ = self.solver.solve_cpp(self.population[:self.off_size])
+        self.fitness[self.off_size: self.off_size * 2], _ = self.solver.solve_cpp(self.population[self.off_size: self.off_size * 2])
 
         # Sort indices by fitness (descending)
         indices = np.argsort(self.fitness)[::-1]
@@ -51,7 +49,7 @@ class GA_SKPP:
                 self.population[indices[self.pop_size + i]] = (
                     np.clip(self.population[indices[self.pop_size + i]], 0, self.instance.max_p))  # Keep within bounds
 
-            self.fitness[indices[self.pop_size:]], _ = self.solver.solve(self.population[indices[self.pop_size:]])
+            self.fitness[indices[self.pop_size:]], _ = self.solver.solve_cpp(self.population[indices[self.pop_size:]])
             indices = np.argsort(self.fitness)[::-1]
 
             # Print progress

@@ -14,7 +14,7 @@ device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 print('Experiments running on', device)
 
 
-MIN_SIZE, MAX_SIZE = 15, 30
+MIN_SIZE, MAX_SIZE = 15, 25
 
 
 file_name = 'NET/test_' + str(MIN_SIZE) + '_' + str(MAX_SIZE) + '.pth'
@@ -44,7 +44,7 @@ for iteration in range(ITERATIONS):
 
     batch = create_batch(instances, device=device)
 
-    samples, log_probs = agent(batch, N_SAMPLES)
+    samples, log_probs, _ = agent(batch, N_SAMPLES)
 
     rewards, baselines, log_prices = [], [], []
     wins, gaps = 0, []

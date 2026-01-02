@@ -30,9 +30,12 @@ def truncated_normal_log_prob(x, mu, sigma, low=0, high=1):
 
 # Node Classification Model using EGAT
 class EGAT(torch.nn.Module):
-    def __init__(self, node_channels, edge_channels, hidden_channels=64, out_channels=2, lr=0.001, wd=0.0001, heads=3, dropout=0.5, device=torch.device('cpu')):
+    def __init__(self, node_channels, edge_channels, hidden_channels=64, out_channels=2, lr=0.001, wd=0.0001, heads=3,
+                 dropout=0.5, device=torch.device('cpu')):
         super().__init__()
 
+        self.node_channels = node_channels
+        self.edge_channels = edge_channels
         self.hidden_init = hidden_channels
         self.output_init = out_channels
         self.heads_init = heads
@@ -64,7 +67,7 @@ class EGAT(torch.nn.Module):
             in_channels=hidden_channels * heads,
             out_channels=out_channels,
             heads=1,  # Single head for output
-            edge_dim=3,
+            edge_dim=edge_channels,
             dropout=dropout,
             concat=False  # Don't concat for final layer
         )
@@ -106,16 +109,25 @@ class EGAT(torch.nn.Module):
 
         log_action = truncated_normal_log_prob(sample, mu_expanded, sigma_expanded, low=0, high=1)
 
-        return sample, log_action
+        return sample, log_action, mu
 
     def get_distribution(self, instance, n_samples):
         batch = create_batch([instance])
         if self.device.type == 'cuda':
             batch = batch.to(self.device)
         with torch.no_grad():
-            sample, _ = self.forward(batch, n_samples)
+            sample, _, _ = self.forward(batch, n_samples)
             mask = batch.x[:, -1] == 1  # get only paths (i.e. x[:, -1 == 1) of the batch
             return sample[:, mask]
+
+    def get_mean(self, instance):
+        batch = create_batch([instance])
+        if self.device.type == 'cuda':
+            batch = batch.to(self.device)
+        with torch.no_grad():
+            _, _, mu = self.forward(batch, 1)
+            mask = batch.x[:, -1] == 1  # get only paths (i.e. x[:, -1 == 1) of the batch
+            return mu[mask]
 
     def train_policy(self, log_action, reward, baseline):
 
@@ -149,7 +161,8 @@ class EGAT(torch.nn.Module):
                 'heads': self.conv1.heads,
                 'dropout': self.dropout
             },
-            'init_params': {'hidden_init': self.hidden_init, 'output_init': self.output_init,
+            'init_params': {'node_channels': self.node_channels, 'edge_channels': self.edge_channels,
+                            'hidden_init': self.hidden_init, 'output_init': self.output_init,
                             'heads_init': self.heads_init, 'dropout_init': self.dropout_init,
                             'best_gap': self.best_gap
                             },
@@ -182,7 +195,8 @@ def load_agent(path, device=None) -> EGAT:
         device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
     init_params = torch.load(path, map_location=device, weights_only=False)['init_params']
-    agent = EGAT(hidden_channels=init_params['hidden_init'], out_channels=init_params['output_init'],
+    agent = EGAT(node_channels=init_params['node_channels'], edge_channels=init_params['edge_channels'],
+                 hidden_channels=init_params['hidden_init'], out_channels=init_params['output_init'],
                  heads=init_params['heads_init'], dropout=init_params['dropout_init'])
     agent.best_gap = init_params['best_gap']
     agent.load(path, device=device)

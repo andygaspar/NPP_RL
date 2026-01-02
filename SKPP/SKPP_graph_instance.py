@@ -23,14 +23,14 @@ class SKKGraph(SPKK_instance):
         for i in range(self.M):
             item_type = 1 if i < self.L else 0  # 1 for type A, 0 for type B
             # Feature: [value, *, one hot]
-            item_feature = [self.p[0, i], 0, 0, 1 - item_type, item_type]
+            item_feature = [self.p[:, i].mean(), self.w[:, i].mean(), 0, 0, 1 - item_type, item_type]
             item_features.append(item_feature)
 
         # Create user node features
         user_features = []
         for k in range(self.K):
             # Feature: [capacity, 0 for padding, 1 for indicating user node]
-            user_feature = [0, self.c[k], 1, 0, 0]
+            user_feature = [0, 0, self.c[k], 1, 0, 0]
             user_features.append(user_feature)
 
         # Concatenate all node features
@@ -48,7 +48,7 @@ class SKKGraph(SPKK_instance):
 
                 # Edge feature: [weight, item_type]
                 item_type = 0 if i < self.L else 1
-                edge_feature = [self.w[k, i], item_type, 1 - item_type]
+                edge_feature = [self.w[k, i], self.p[k, i], item_type, 1 - item_type]
                 edge_features.append(edge_feature)
 
         edge_index = torch.tensor(edge_indices, dtype=torch.long).t().contiguous()
@@ -78,26 +78,18 @@ class SKKGraph(SPKK_instance):
     def rescale_p(self, t: torch.Tensor) -> np.ndarray:
         return np.ascontiguousarray(t.detach().to('cpu').numpy()) * self.max_p
 
-    def eval_sample(self, sample_tensor: torch.Tensor, method):
+    def eval_sample(self, sample_tensor: torch.Tensor):
         p = self.rescale_p(sample_tensor)
-        if method == 'exact':
-            from SKPP.skpp_solver import SKPP_pop
-            skpp = SKPP_pop(self, pop_size=sample_tensor.shape[0])
-        else:
-            from SKPP.skpp_solver import SKPP_greedy_pop
-            skpp = SKPP_greedy_pop(self, pop_size=sample_tensor.shape[0])
-        return skpp.solve(p)
+        from KP_Solver.knap_cpp import KnapCpp
+        bb = KnapCpp(self, pop_size=sample_tensor.shape[0])
+        return bb.solve_cpp(p)
 
-    def random_baseline(self, sample_size, method):
+    def random_baseline(self, sample_size):
         random_sol = np.random.uniform(0, self.max_p, (sample_size, self.L))
-        if method == 'exact':
-            from SKPP.skpp_solver import SKPP_pop
-            skpp = SKPP_pop(self, pop_size=sample_size)
-        else:
-            from SKPP.skpp_solver import SKPP_greedy_pop
-            skpp = SKPP_greedy_pop(self, pop_size=sample_size)
-        _, best_val = skpp.solve(random_sol)
-        return best_val
+        from KP_Solver.knap_cpp import KnapCpp
+        bb = KnapCpp(self, pop_size=sample_size)
+        _, max_val = bb.solve_cpp(random_sol)
+        return max_val
 
 
 def create_SKPP_batch(instances, device=torch.device('cpu')):

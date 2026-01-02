@@ -80,8 +80,15 @@ class GATInstance(Instance):
     def eval_sample(self, sample_tensor: torch.Tensor):
         from Solver.genetic_solver import Genetic
         g = Genetic(self, pop_size=sample_tensor.shape[0], verbose=False)
-        g.run(1, init_population=self.rescale_prices(sample_tensor))
+        g.eval(init_population=self.rescale_prices(sample_tensor))
         return g.final_vals, g.best_val
+
+    def eval(self, prices: torch.Tensor):
+        prices = torch.stack([prices]*2)
+        _, val = self.eval_sample(prices)
+        return val
+
+
 
     def random_baseline(self, sample_size):
         random_sol = np.random.uniform(self.lower_bounds, self.upper_bounds, (sample_size, self.n_paths))
@@ -94,7 +101,7 @@ class GATInstance(Instance):
 def create_batch(instances: List[GATInstance], device=torch.device('cpu')):
     """Create a batch of heterographs"""
 
-    hetero_data_list = [inst.graph for inst in instances]
+    hetero_data_list = [inst.data for inst in instances]
     batch = Batch.from_data_list(hetero_data_list)
     if device.type == 'cuda':
         batch.to(device)

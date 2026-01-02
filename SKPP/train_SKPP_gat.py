@@ -32,13 +32,12 @@ N_SAMPLES = 128
 ITERATIONS = 3000
 EPISODE_PER_BATCH = 128
 
-BASELINE_ITERATIONS = 100
+BASELINE_ITERATIONS = 10
 POPULATION = N_SAMPLES
-METHOD = 'greedy'
 
 lr = 0.001
 wd = 0.0001
-agent = EGAT(5, 3, HIDDEN, 2, lr=lr, wd=wd, device=device)
+agent = EGAT(6, 4, HIDDEN, 2, lr=lr, wd=wd, device=device)
 
 BEST_GAP = 0
 t = time.time()
@@ -60,15 +59,15 @@ for iteration in range(ITERATIONS):
         inst_sample_tensor = samples[:, mask]
         log_prices.append(log_probs[:, mask].flatten())
 
-        g = GA_SKPP(inst, pop_size=POPULATION, method=METHOD)
+        g = GA_SKPP(inst, pop_size=POPULATION)
         g.run(BASELINE_ITERATIONS)
         baselines += [g.best_val for _ in range(inst.L * N_SAMPLES)]
 
         # rewards.append([g_nn.best_val for _ in range(inst.L * N_SAMPLES)])
-        vals, agent_best_val = inst.eval_sample(inst_sample_tensor, method=METHOD)
+        vals, agent_best_val = inst.eval_sample(inst_sample_tensor)
         rewards += np.repeat(vals, inst.L).tolist()
 
-        random_best_val = inst.random_baseline(N_SAMPLES, method=METHOD)
+        random_best_val = inst.random_baseline(N_SAMPLES)
 
         wins += g.best_val < agent_best_val
         gaps += [agent_best_val/g.best_val if g.best_val > 0 else 0]
@@ -99,4 +98,4 @@ for iteration in range(ITERATIONS):
               f"rand avg gap: {np.mean(rand_gaps) :.3f} | "
               )
 
-agent.save('NET/test.pth')
+agent.save('SKK/NET/test.pth')
