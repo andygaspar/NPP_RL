@@ -46,6 +46,21 @@ class SKPP:
         backtrack(0, [], 0)
         return result
 
+    def remove_sub_optimal(self, comb_k, k):
+        p = np.array([self.p[k][list(c)].sum() for c in comb_k])
+        to_exclude = np.zeros_like(p, dtype=bool)
+        for c_idx, c in enumerate(comb_k):
+            c_f = [i for i in c if i >= self.inst.L]
+            if len(c_f) == len(c):
+                to_exclude[c_idx] = True
+
+        p_follower = p * to_exclude
+        max_idx = np.argmax(p_follower)
+        non_follower = 1 - to_exclude
+        non_follower[max_idx] = True
+        new_comb_k = [comb_k[i] for i in range(len(comb_k)) if non_follower[i]]
+        return new_comb_k
+
     def solve(self, verbose=False):
         if not verbose:
             self.model.setParam('OutputFlag', 0)
@@ -57,7 +72,8 @@ class SKPP:
         p = self.model.addMVar(self.inst.L)
         t = self.model.addMVar((self.inst.K, self.inst.L))
         for k in range(self.inst.K):
-            combs[k] = self.maximal_combinations_final(self.inst.w[k].tolist(), self.inst.c[k])
+            combs_k = self.maximal_combinations_final(self.inst.w[k].tolist(), self.inst.c[k])
+            combs[k] = self.remove_sub_optimal(combs_k, k)
             z[k] = self.model.addMVar(len(combs[k]), vtype=GRB.BINARY)
 
         for k in range(self.inst.K):
