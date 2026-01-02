@@ -3,7 +3,6 @@ import time
 import numpy as np
 
 from KP_Solver.knap_cpp import KnapCpp
-from SKPP.skpp_solver import SKPP_pop, SKPP_greedy_pop
 from SKPP.skpp_instance import SKPP_instance
 
 

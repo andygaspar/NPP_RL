@@ -17,7 +17,7 @@ print('Experiments running on', device)
 MIN_SIZE, MAX_SIZE = 15, 30
 
 SAVE = False
-file_name = 'SKPP/NET/test_' + str(MIN_SIZE) + '_' + str(MAX_SIZE) + '.pth'
+file_name = 'SKPP/NET/test_skpp_' + str(MIN_SIZE) + '_' + str(MAX_SIZE) + '.pth'
 
 M = range(MIN_SIZE, MAX_SIZE)
 K = range(MIN_SIZE, MAX_SIZE)
@@ -45,7 +45,7 @@ for iteration in range(ITERATIONS):
 
     batch = create_SKPP_batch(instances, device=device)
 
-    samples, log_probs = agent(batch, N_SAMPLES)
+    samples, log_probs, _ = agent(batch, N_SAMPLES)
 
     rewards, baselines, log_prices = [], [], []
     wins, gaps = 0, []
