@@ -1,3 +1,5 @@
+import time
+
 import gurobipy as gb
 from gurobipy import GRB
 import numpy as np
@@ -45,6 +47,7 @@ class SKPP:
     def solve(self, verbose=False):
         if not verbose:
             self.model.setParam('OutputFlag', 0)
+        tt = time.time()
         combs = {}
         z = {}
         M = 10000
@@ -82,6 +85,9 @@ class SKPP:
         self.model.setObjective(
             (self.p[:, :self.inst.L] * self.x[:, :self.inst.L]).sum() - t.sum(), gb.GRB.MAXIMIZE
         )
+
+        if verbose:
+            print('Constraints time', time.time() - tt)
 
         self.model.optimize()
         if self.model.Status == GRB.INFEASIBLE:
