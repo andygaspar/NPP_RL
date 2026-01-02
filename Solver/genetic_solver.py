@@ -59,3 +59,7 @@ class Genetic:
                 np.random.choice(vals, size=self.pop_size, replace=True))
         return population
         # self.vals = np.array([self.fitness_fun(sol) for sol in self.population])
+
+    def eval(self, init_population):
+        self.final_vals = self.genetic.eval(init_population)
+        self.best_val = self.final_vals.max()
