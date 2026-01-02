@@ -4,12 +4,9 @@ import numpy as np
 from torch import optim
 from torchrl.modules import TruncatedNormal
 
-from Instance import instance
-from Instance.instance import Instance, get_feature_size
-from torch.distributions import Categorical, Normal, Beta
+from NPP.Instance.instance import Instance, get_feature_size
 
-from Solver.genetic_solver import Genetic
-from Solver.solver import GlobalSolver
+from NPP.Solver.genetic_solver import Genetic
 
 
 class Net(nn.Module):

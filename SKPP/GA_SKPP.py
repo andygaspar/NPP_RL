@@ -1,3 +1,5 @@
+import time
+
 import numpy as np
 
 from KP_Solver.knap_cpp import KnapCpp
@@ -12,14 +14,20 @@ class GA_SKPP:
         self.instance = instance
         self.pop_size = pop_size
         self.off_size = pop_size // 2
-        self.population = np.random.uniform(0, instance.p[0, : instance.L], size=(self.pop_size + self.off_size, instance.L))
+        self.population = None
         self.fitness = np.ones(self.pop_size + self.off_size) * (-1e4)
         self.solver = KnapCpp(self.instance, pop_size=self.off_size)
         self.best_val = None
         self.best_solution = None
         self.avg_fitness = None
+        self.time = None
 
-    def run(self, iterations, verbose=False):
+    def run(self, iterations, init_population=None, verbose=False):
+        if init_population is None:
+            self.population = np.random.uniform(0, self.instance.p[0, : self.instance.L], size=(self.pop_size + self.off_size, self.instance.L))
+        else:
+            self.population = init_population
+        self.time = time.time()
         self.fitness[:self.off_size], _ = self.solver.solve_cpp(self.population[:self.off_size])
         self.fitness[self.off_size: self.off_size * 2], _ = self.solver.solve_cpp(self.population[self.off_size: self.off_size * 2])
 
@@ -57,7 +65,7 @@ class GA_SKPP:
             self.avg_fitness = np.mean(self.fitness)
             if verbose and (gen % 50 == 0 or gen == iterations - 1):
                 print(f"Gen {gen}: Best={self.best_val:.2f}, Avg={self.avg_fitness:.2f}")
-
+        self.time = time.time() - self.time
         self.best_solution = self.population[indices[0]]
 
 

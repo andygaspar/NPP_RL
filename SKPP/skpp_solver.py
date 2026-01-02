@@ -16,6 +16,8 @@ class SKPP:
 
         self.inst = problem
         self.p = problem.p
+        self.obj = None
+        self.time = None
 
         self.x = self.model.addMVar((self.inst.K, self.inst.M), vtype=GRB.BINARY)
 
@@ -90,6 +92,8 @@ class SKPP:
             print('Constraints time', time.time() - tt)
 
         self.model.optimize()
+        self.time = time.time() - tt
+        self.obj = self.model.objVal
         if self.model.Status == GRB.INFEASIBLE:
             self.model.computeIIS()
             for c in self.model.getConstrs():

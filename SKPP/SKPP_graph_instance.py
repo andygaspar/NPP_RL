@@ -84,6 +84,11 @@ class SKKGraph(SPKK_instance):
         bb = KnapCpp(self, pop_size=sample_tensor.shape[0])
         return bb.solve_cpp(p)
 
+    def eval(self, p: torch.Tensor):
+        p = torch.stack([p] * 2)
+        _, val = self.eval_sample(p)
+        return val
+
     def random_baseline(self, sample_size):
         random_sol = np.random.uniform(0, self.max_p, (sample_size, self.L))
         from KP_Solver.knap_cpp import KnapCpp

@@ -2,8 +2,8 @@ import time
 
 import numpy as np
 
-from GA_CPP.GA.genetic_cpp import GeneticCpp
-from Instance.instance import Instance
+from NPP.GA_CPP.GA.genetic_cpp import GeneticCpp
+from NPP.Instance.instance import Instance
 
 
 # from heuristic import improve_solution

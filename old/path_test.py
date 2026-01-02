@@ -1,11 +1,8 @@
-import os
 import random
-import os
 import numpy as np
-import pandas as pd
 
-from Instance.instance import Instance
-from Solver.solver import GlobalSolver
+from NPP.Instance.instance import Instance
+from NPP.Solver.solver import GlobalSolver
 
 # from Net.network_manager import NetworkManager
 

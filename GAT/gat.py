@@ -4,7 +4,7 @@ import torch
 import torch.nn.functional as F
 from torch_geometric.nn import GATv2Conv
 
-from Instance.gat_instance import create_batch
+from NPP.Instance.gat_instance import create_batch
 
 
 def truncated_normal_log_prob(x, mu, sigma, low=0, high=1):

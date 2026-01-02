@@ -1,4 +1,3 @@
-import random
 import time
 
 import numpy as np
@@ -6,9 +5,7 @@ import torch
 
 from SKPP.GA_SKPP import GA_SKPP
 from SKPP.SKPP_graph_instance import create_SKPP_batch, SKKGraph
-from SKPP.skpp_instance import SPKK_instance
-from Solver.genetic_solver import Genetic
-from gat import EGAT
+from GAT.gat import EGAT
 
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')

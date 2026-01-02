@@ -18,7 +18,7 @@ class GeneticCpp:
         self.stats = None
         self.n_paths = n_paths
         self.offs_size = offs_size
-        self.lib = ctypes.CDLL('GA_CPP/GA/ga_bridge.so')
+        self.lib = ctypes.CDLL('NPP/GA_CPP/GA/ga_bridge.so')
 
         self.lib.Genetic_.argtypes = [ctypes.POINTER(ctypes.c_double), ctypes.POINTER(ctypes.c_double),
                                       ctypes.POINTER(ctypes.c_double),

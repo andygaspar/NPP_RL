@@ -1,12 +1,11 @@
-import random
 import time
 
 import numpy as np
 import torch
 
-from Instance.gat_instance import create_batch, GATInstance
-from Solver.genetic_solver import Genetic
-from gat import EGAT
+from NPP.Instance.gat_instance import create_batch, GATInstance
+from NPP.Solver.genetic_solver import Genetic
+from GAT.gat import EGAT
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 # device = torch.device('cpu')
@@ -17,7 +16,7 @@ print('Experiments running on', device)
 MIN_SIZE, MAX_SIZE = 15, 25
 
 
-file_name = 'NET/test_' + str(MIN_SIZE) + '_' + str(MAX_SIZE) + '.pth'
+file_name = 'NPP/NET/test_' + str(MIN_SIZE) + '_' + str(MAX_SIZE) + '.pth'
 
 N_COMM = range(MIN_SIZE, MAX_SIZE)
 N_PATHS = range(MIN_SIZE, MAX_SIZE)
@@ -93,4 +92,3 @@ for iteration in range(ITERATIONS):
               f"rand avg gap: {np.mean(rand_gaps) :.3f} | "
               )
 
-agent.save('NET/test.pth')
