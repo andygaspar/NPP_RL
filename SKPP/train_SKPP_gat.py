@@ -14,7 +14,7 @@ device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 print('Experiments running on', device)
 
 
-MIN_SIZE, MAX_SIZE = 15, 30
+MIN_SIZE, MAX_SIZE = 10, 30
 
 SAVE = False
 file_name = 'SKPP/NET/test_' + str(MIN_SIZE) + '_' + str(MAX_SIZE) + '.pth'
@@ -25,11 +25,11 @@ SEED = 1
 
 HIDDEN = 64
 
-N_SAMPLES = 128
+N_SAMPLES = 64
 ITERATIONS = 3000
-EPISODE_PER_BATCH = 128
+EPISODE_PER_BATCH = 16
 
-BASELINE_ITERATIONS = 10
+BASELINE_ITERATIONS = 100
 POPULATION = N_SAMPLES
 
 lr = 0.001
@@ -45,13 +45,14 @@ for iteration in range(ITERATIONS):
 
     batch = create_SKPP_batch(instances, device=device)
 
-    samples, log_probs = agent(batch, N_SAMPLES)
+    samples, log_probs, _ = agent(batch, N_SAMPLES)
 
     rewards, baselines, log_prices = [], [], []
     wins, gaps = 0, []
     rand_wins, rand_gaps = 0, []
 
     for i, inst in enumerate(instances):
+        # print(iteration, i)
         mask = (batch.batch == i) * (batch.x[:, -1] == 1) # get only p controlled by the leader (i.e. x[:, -1 == 1) of the batch
         inst_sample_tensor = samples[:, mask]
         log_prices.append(log_probs[:, mask].flatten())
@@ -84,7 +85,7 @@ for iteration in range(ITERATIONS):
 
     loss = agent.train_policy(log_prices, reward_tensor, baseline_tensor)
 
-    if iteration % 25 == 0:
+    if iteration % 1 == 0:
         max_agent = reward_tensor.max().item()
         print(f"E{iteration:4d} | " 
               f"Train time {time.time() - t:.1f} || " 
