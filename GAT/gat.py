@@ -131,11 +131,14 @@ class EGAT(torch.nn.Module):
 
     def train_policy(self, log_action, reward, baseline):
 
-        advantage = reward - baseline
+        if reward.max() > 0:
+            advantage = reward - baseline
 
-        # Normalize advantage for stability
-        if advantage.std() > 0:
-            advantage = (advantage - advantage.mean()) / (advantage.std() + 1e-8)
+            # Normalize advantage for stability
+            if advantage.std() > 0:
+                advantage = (advantage - advantage.mean()) / (advantage.std() + 1e-8)
+        else:
+            advantage = reward / (-reward.min())
 
         loss = -(advantage * log_action).mean()
 

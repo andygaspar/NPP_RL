@@ -80,7 +80,7 @@ class SKPPGraph(SKPP_instance):
         return data
 
     def rescale_p(self, t: torch.Tensor) -> np.ndarray:
-        return np.ascontiguousarray(t.detach().to('cpu').numpy()) * self.max_p
+        return np.ascontiguousarray(t.detach().to('cpu').numpy()) * self.max_p #/ 2
 
     def eval_sample(self, sample_tensor: torch.Tensor):
         p = self.rescale_p(sample_tensor)
