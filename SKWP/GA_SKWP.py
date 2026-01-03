@@ -23,7 +23,7 @@ class GA_SKWP:
 
     def run(self, iterations, init_population=None, verbose=False):
         if init_population is None:
-            self.population = np.random.uniform(0, self.instance.w[0, : self.instance.L], size=(self.pop_size + self.off_size, self.instance.L))
+            self.population = np.random.uniform(0, self.instance.max_w, size=(self.pop_size + self.off_size, self.instance.L))
         else:
             self.population = init_population
         self.time = time.time()
