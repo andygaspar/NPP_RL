@@ -45,6 +45,24 @@ class SKWP:
         new_comb_k = [comb_k[i] for i in range(len(comb_k)) if non_follower[i] and (p[i] >= max_val)]
         return new_comb_k
 
+    def remove_sub_optimal_2(self, k):
+
+        leader_combs = []
+        for i in range(1, self.inst.L + 1):
+            leader_comb_i = [list(subset) for subset in itertools.combinations(range(0, self.inst.L), i)]
+            p = self.p[k][leader_comb_i].sum(axis=-1)
+            max_idx = np.argmax(p)
+            leader_combs.append(leader_comb_i[max_idx])
+        follower_combs = []
+        for i in range(1, self.inst.L + 1):
+            follower_combs_i = [list(subset) for subset in itertools.combinations(range(self.inst.L, self.inst.M), i)]
+            w = self.w[k][follower_combs_i].sum(axis=-1)
+            follower_combs += [comb for j, comb in enumerate(follower_combs_i) if w[j] <= self.c[k]]
+
+        combs = leader_combs + [l + f for l in leader_combs for f in follower_combs]
+
+        return combs
+
     def solve(self, verbose=False):
         if not verbose:
             self.model.setParam('OutputFlag', 0)
@@ -57,9 +75,11 @@ class SKWP:
         w = self.model.addMVar(self.inst.L)
         t = self.model.addMVar((self.inst.K, self.inst.L))
         for k in range(self.inst.K):
-            lst = list(range(self.inst.M))
-            combs_k = [list(subset) for r in range(1, len(lst) + 1) for subset in itertools.combinations(lst, r)]
-            combs[k] = self.remove_sub_optimal(combs_k, k)
+
+            # lst = list(range(self.inst.M))
+            # combs_k = [list(subset) for r in range(1, len(lst) + 1) for subset in itertools.combinations(lst, r)]
+            # combs[k] = self.remove_sub_optimal(combs_k, k)
+            combs[k] = self.remove_sub_optimal_2(k)
             combs_bool[k] = np.zeros((len(combs[k]), self.inst.M), dtype=bool)
             z[k] = self.model.addMVar(len(combs[k]), vtype=GRB.BINARY)
             s[k] = self.model.addMVar(len(combs[k]), vtype=GRB.BINARY)
