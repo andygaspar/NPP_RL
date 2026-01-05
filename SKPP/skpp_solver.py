@@ -66,6 +66,7 @@ class SKPP:
             self.model.setParam('OutputFlag', 0)
         tt = time.time()
         combs = {}
+        combs_bool = {}
         z = {}
         M = 10000
         N = 2000
@@ -74,26 +75,59 @@ class SKPP:
         for k in range(self.inst.K):
             combs_k = self.maximal_combinations_final(self.inst.w[k].tolist(), self.inst.c[k])
             combs[k] = self.remove_sub_optimal(combs_k, k)
+            combs_bool[k] = np.zeros((len(combs[k]), self.inst.M), dtype=bool)
+            for c_idx, c in enumerate(combs[k]):
+                combs_bool[k][c_idx, c] = True
+
             z[k] = self.model.addMVar(len(combs[k]), vtype=GRB.BINARY)
 
         for k in range(self.inst.K):
             self.model.addConstr(z[k].sum() == 1, name='z ' + str(k))
-            for c_idx, c in enumerate(combs[k]):
-                c_l = [i for i in c if i < self.inst.L]
-                c_f = [i for i in c if i >= self.inst.L]
-                for q_idx, q in enumerate(combs[k]):
-                    q_l = [i for i in q if i < self.inst.L]
-                    q_f = [i for i in q if i >= self.inst.L]
-                    self.model.addConstr(
-                        self.p[k][c_f].sum() + t[k][c_l].sum() >=
-                        self.p[k][q_f].sum() + p[q_l].sum() - (1 - z[k][c_idx]) * M,
-                        name = 'comb ' + str(c) + ' ' + str(q)
-                    )
+            self.model.addConstr((combs_bool[k] * self.x[k]).sum(axis=1) >= combs_bool[k].sum(axis=1) * z[k],
+                                 name='x > z ' + str(k))
+            self.model.addConstr(self.x[k].sum() <=
+                                 combs_bool[k].sum(axis=1) + (1 - z[k]) * (self.inst.M - combs_bool[k].sum(axis=1)),
+                                 name='x < z ' + str(k))
+            # for c_idx, c in enumerate(combs[k]):
+            #
+            #     self.model.addConstr(self.x[k][list(c)].sum() >= len(c) * z[k][c_idx],
+            #                          name='x > z ' + str(k) + ' ' + str(c))
+            #     self.model.addConstr(self.x[k].sum() <= len(c) + (1 - z[k][c_idx]) * (self.inst.M - len(c)),
+            #                          name='x < z ' + str(k) + ' ' + str(c))
 
-                self.model.addConstr(self.x[k][list(c)].sum() >= len(c) * z[k][c_idx],
-                                     name='x > z ' + str(k) + ' ' + str(c))
-                self.model.addConstr(self.x[k].sum() <= len(c) + (1 - z[k][c_idx]) * (self.inst.M - len(c)),
-                                     name='x < z ' + str(k) + ' ' + str(c))
+            constant_part = combs_bool[k][:, self.inst.L:] @ self.p[k, self.inst.L:]  # numpy array
+            variable_part = combs_bool[k][:, :self.inst.L] @ t[k]  # MVar
+
+            # Combine: numpy array + MVar = MVar
+            constr_expr = constant_part + variable_part
+            n_combs = constr_expr.shape[0]
+
+            if n_combs > 1:
+                # Pre-calculate size
+                total_pairs = n_combs * (n_combs - 1)
+
+                # Create index arrays
+                i_indices = np.repeat(np.arange(n_combs), n_combs)
+                j_indices = np.tile(np.arange(n_combs), n_combs)
+
+                # Remove i == j cases
+                mask = i_indices != j_indices
+                i_indices = i_indices[mask]
+                j_indices = j_indices[mask]
+
+                # Initialize coefficient matrix
+                coeff_matrix = np.zeros((total_pairs, n_combs))
+
+                # Fill using vectorized operations
+                row_indices = np.arange(total_pairs)
+                coeff_matrix[row_indices, i_indices] = 1
+                coeff_matrix[row_indices, j_indices] = -1
+
+                bigM_terms = np.zeros((total_pairs, n_combs))
+                bigM_terms[row_indices, i_indices] = M  # Coefficient for z[i]
+
+                # Add constraints
+                self.model.addConstr(coeff_matrix @ constr_expr - bigM_terms @ z[k] >= -M)
 
             for i in range(self.inst.L):
                 self.model.addConstr(t[k, i] <= self.x[k, i] * N, name='t < x ' + str(k) + ' ' + str(i))
