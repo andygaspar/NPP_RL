@@ -102,32 +102,31 @@ class SKPP:
             constr_expr = constant_part + variable_part
             n_combs = constr_expr.shape[0]
 
-            if n_combs > 1:
-                # Pre-calculate size
-                total_pairs = n_combs * (n_combs - 1)
+            # Pre-calculate size
+            total_pairs = n_combs * (n_combs - 1)
 
-                # Create index arrays
-                i_indices = np.repeat(np.arange(n_combs), n_combs)
-                j_indices = np.tile(np.arange(n_combs), n_combs)
+            # Create index arrays
+            i_indices = np.repeat(np.arange(n_combs), n_combs)
+            j_indices = np.tile(np.arange(n_combs), n_combs)
 
-                # Remove i == j cases
-                mask = i_indices != j_indices
-                i_indices = i_indices[mask]
-                j_indices = j_indices[mask]
+            # Remove i == j cases
+            mask = i_indices != j_indices
+            i_indices = i_indices[mask]
+            j_indices = j_indices[mask]
 
-                # Initialize coefficient matrix
-                coeff_matrix = np.zeros((total_pairs, n_combs))
+            # Initialize coefficient matrix
+            coeff_matrix = np.zeros((total_pairs, n_combs))
 
-                # Fill using vectorized operations
-                row_indices = np.arange(total_pairs)
-                coeff_matrix[row_indices, i_indices] = 1
-                coeff_matrix[row_indices, j_indices] = -1
+            # Fill using vectorized operations
+            row_indices = np.arange(total_pairs)
+            coeff_matrix[row_indices, i_indices] = 1
+            coeff_matrix[row_indices, j_indices] = -1
 
-                bigM_terms = np.zeros((total_pairs, n_combs))
-                bigM_terms[row_indices, i_indices] = M  # Coefficient for z[i]
+            bigM_terms = np.zeros((total_pairs, n_combs))
+            bigM_terms[row_indices, i_indices] = M  # Coefficient for z[i]
 
-                # Add constraints
-                self.model.addConstr(coeff_matrix @ constr_expr - bigM_terms @ z[k] >= -M)
+            # Add constraints
+            self.model.addConstr(coeff_matrix @ constr_expr - bigM_terms @ z[k] >= -M)
 
             for i in range(self.inst.L):
                 self.model.addConstr(t[k, i] <= self.x[k, i] * N, name='t < x ' + str(k) + ' ' + str(i))
