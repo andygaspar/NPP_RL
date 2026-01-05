@@ -69,14 +69,18 @@ class SKPPGraph(SKPP_instance):
             L=self.L,  # Number of type A items
         )
 
-        data.x[:, 0] /= self.max_p
-        data.x[:, 1] /= self.c.max()
-        data.edge_attr[:, 0] /= self.w.max()
+        norm_vals = data.x.max(dim=0)[0]
+        for i in range(data.x.shape[1]):
+            data.x[:, i] /= norm_vals[i]
+
+        edge_norm_vals = data.edge_attr.max(dim=0)[0]
+        for i in range(data.edge_attr.shape[1]):
+            data.edge_attr[:, i] /= edge_norm_vals[i]
 
         return data
 
     def rescale_p(self, t: torch.Tensor) -> np.ndarray:
-        return np.ascontiguousarray(t.detach().to('cpu').numpy()) * self.max_p
+        return np.ascontiguousarray(t.detach().to('cpu').numpy()) * self.max_p #/ 2
 
     def eval_sample(self, sample_tensor: torch.Tensor):
         p = self.rescale_p(sample_tensor)

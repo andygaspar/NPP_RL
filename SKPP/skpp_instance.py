@@ -1,4 +1,3 @@
-import gurobipy as gb
 import numpy as np
 
 
@@ -15,7 +14,7 @@ class SKPP_instance:
         self.c = self.w.sum(axis=1)//4
         self.p = self.w + 10
 
-        self.max_p = self.p.max()
+        self.max_p = self.p[:, :self.L] .max(axis=0)
 
     def sort_values(self):
         for k in range(self.K):

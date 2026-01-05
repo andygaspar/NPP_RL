@@ -3,7 +3,6 @@ import time
 import numpy as np
 
 from KP_Solver.knap_cpp import KnapCpp
-from SKPP.skpp_solver import SKPP_pop, SKPP_greedy_pop
 from SKPP.skpp_instance import SKPP_instance
 
 
@@ -24,7 +23,7 @@ class GA_SKPP:
 
     def run(self, iterations, init_population=None, verbose=False):
         if init_population is None:
-            self.population = np.random.uniform(0, self.instance.p[0, : self.instance.L], size=(self.pop_size + self.off_size, self.instance.L))
+            self.population = np.random.uniform(0, self.instance.max_p, size=(self.pop_size + self.off_size, self.instance.L))
         else:
             self.population = init_population
         self.time = time.time()

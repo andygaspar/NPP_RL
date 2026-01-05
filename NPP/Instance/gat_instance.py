@@ -66,8 +66,15 @@ class GATInstance(Instance):
         )
 
         # Normalise features
-        torch.nn.functional.normalize(data.x, dim=0)
-        torch.nn.functional.normalize(data.edge_attr, dim=0)
+        norm_vals = data.x.max(dim=0)[0]
+        # Lp might be 0
+        norm_vals[3] = 1 if norm_vals[3] == 0 else norm_vals[3]
+        for i in range(data.x.shape[1]):
+            data.x[:, i] /= norm_vals[i]
+
+        edge_norm_vals = data.edge_attr.max(dim=0)[0]
+        for i in range(data.edge_attr.shape[1]):
+            data.edge_attr[:, i] /= edge_norm_vals[i]
 
         return data
 
