@@ -53,8 +53,7 @@ class SKWP:
         combs_bool = {}
         z = {}
         s = {}
-        M = 1000000
-        N = 2000000
+
         w = self.model.addMVar(self.inst.L)
         t = self.model.addMVar((self.inst.K, self.inst.L))
         for k in range(self.inst.K):
@@ -100,6 +99,12 @@ class SKWP:
             # p_sums[c] - p_sums[q]
             p_coeff[row_indices, c_indices] = 1
             p_coeff[row_indices, q_indices] -= 1
+
+
+            # compute M and N
+
+            M = self.p[k].sum() + (combs_bool[k][:, :self.inst.L:] @ self.p[k][:self.inst.L]).max()
+            N = self.c[k]
 
             # M*z[c] + M*s[c] (from RHS: -M*(1-z) - M*(1-s) = -2M + M*z + M*s)
             z_coeff[row_indices, c_indices] = M  # Note: positive sign
