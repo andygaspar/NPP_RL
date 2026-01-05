@@ -88,12 +88,6 @@ class SKPP:
             self.model.addConstr(self.x[k].sum() <=
                                  combs_bool[k].sum(axis=1) + (1 - z[k]) * (self.inst.M - combs_bool[k].sum(axis=1)),
                                  name='x < z ' + str(k))
-            # for c_idx, c in enumerate(combs[k]):
-            #
-            #     self.model.addConstr(self.x[k][list(c)].sum() >= len(c) * z[k][c_idx],
-            #                          name='x > z ' + str(k) + ' ' + str(c))
-            #     self.model.addConstr(self.x[k].sum() <= len(c) + (1 - z[k][c_idx]) * (self.inst.M - len(c)),
-            #                          name='x < z ' + str(k) + ' ' + str(c))
 
             constant_part = combs_bool[k][:, self.inst.L:] @ self.p[k, self.inst.L:]  # numpy array
             variable_part = combs_bool[k][:, :self.inst.L] @ t[k]  # MVar
