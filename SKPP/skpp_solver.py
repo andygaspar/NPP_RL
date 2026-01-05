@@ -68,8 +68,8 @@ class SKPP:
         combs = {}
         combs_bool = {}
         z = {}
-        M = 10000
-        N = 2000
+        N = self.p[:, :self.inst.L].max()
+        M = self.p.max() * self.inst.M
         p = self.model.addMVar(self.inst.L)
         t = self.model.addMVar((self.inst.K, self.inst.L))
         for k in range(self.inst.K):
