@@ -50,6 +50,7 @@ class SKWP:
             self.model.setParam('OutputFlag', 0)
         tt = time.time()
         combs = {}
+        combs_bool = {}
         z = {}
         s = {}
         M = 1000000
@@ -60,28 +61,55 @@ class SKWP:
             lst = list(range(self.inst.M))
             combs_k = [list(subset) for r in range(1, len(lst) + 1) for subset in itertools.combinations(lst, r)]
             combs[k] = self.remove_sub_optimal(combs_k, k)
+            combs_bool[k] = np.zeros((len(combs[k]), self.inst.M), dtype=bool)
             z[k] = self.model.addMVar(len(combs[k]), vtype=GRB.BINARY)
-            s[k] = self.model.addMVar(len(combs[k]), vtype=GRB.BINARY)
 
-
-        for k in range(self.inst.K):
-            # self.model.addConstr(z[k].sum() == 1, name='z ' + str(k))
             for c_idx, c in enumerate(combs[k]):
-                c_l = [i for i in c if i < self.inst.L]
-                c_f = [i for i in c if i >= self.inst.L]
-                self.model.addConstr(t[k][c_l].sum() + self.w[k][c_f].sum() <= self.c[k] + (1 - s[k][c_idx]) * self.w[k][c_f].sum(), name='w ' + str(c_idx))
-                for q_idx, q in enumerate(combs[k]):
-                    self.model.addConstr(
-                        self.p[k][list(c)].sum() >=
-                        self.p[k][list(q)].sum() - (1 - z[k][c_idx]) * M - (1 - s[k][c_idx]) * M,
-                        name = 'comb ' + str(c) + ' ' + str(q)
-                    )
+                combs_bool[k][c_idx, c] = True
 
-                self.model.addConstr(self.x[k][c].sum() >= len(c) * z[k][c_idx],
-                                     name='x > z ' + str(k) + ' ' + str(c))
-                self.model.addConstr(self.x[k].sum() <= len(c) + (1 - z[k][c_idx]) * (self.inst.M - len(c)),
-                                     name='x < z ' + str(k) + ' ' + str(c))
+            self.model.addConstr(z[k].sum() == 1, name='z ' + str(k))
 
+            self.model.addConstr((combs_bool[k] * self.x[k]).sum(axis=1) >= combs_bool[k].sum(axis=1) * z[k],
+                                 name='x > z ' + str(k))
+            self.model.addConstr(self.x[k].sum() <=
+                                 combs_bool[k].sum(axis=1) + (1 - z[k]) * (self.inst.M - combs_bool[k].sum(axis=1)),
+                                 name='x < z ' + str(k))
+
+            self.model.addConstr(combs_bool[k][:, :self.inst.L] @ t[k] + combs_bool[k][:, self.inst.L:] @ self.w[k][self.inst.L:] <=
+                                 self.c[k] + (1 - z[k]) * (combs_bool[k][:, self.inst.L:] @ self.w[k][self.inst.L:]), name='w ')
+
+            n_combs = len(combs[k])
+
+            # Precompute p sums for each combination
+            p_sums = combs_bool[k] @ self.p[k]
+
+            # Create all pairs (c, q)
+            c_indices = np.repeat(np.arange(n_combs), n_combs)
+            q_indices = np.tile(np.arange(n_combs), n_combs)
+            total_pairs = len(c_indices)
+
+            # Build coefficient matrices
+            p_coeff = np.zeros((total_pairs, n_combs))
+            z_coeff = np.zeros((total_pairs, n_combs))
+
+            row_indices = np.arange(total_pairs)
+
+            # p_sums coefficients: p_sums[c] - p_sums[q]
+            p_coeff[row_indices, c_indices] = 1
+            p_coeff[row_indices, q_indices] -= 1
+
+            # z coefficients: -M*z[c] - M*z[q]
+            z_coeff[row_indices, c_indices] = -M
+            z_coeff[row_indices, q_indices] = -M
+
+            # RHS: -2M
+            rhs = np.full(total_pairs, -2 * M)
+
+            # Add both sets of constraints at once
+            self.model.addConstr(
+                p_coeff @ p_sums + z_coeff @ z[k] >= rhs,
+                name=f"p_comparison_k{k}"
+            )
 
             for i in range(self.inst.L):
                 self.model.addConstr(t[k, i] <= self.x[k, i] * N, name='t < x ' + str(k) + ' ' + str(i))

@@ -81,7 +81,6 @@ class SKPP:
 
             z[k] = self.model.addMVar(len(combs[k]), vtype=GRB.BINARY)
 
-        for k in range(self.inst.K):
             self.model.addConstr(z[k].sum() == 1, name='z ' + str(k))
             self.model.addConstr((combs_bool[k] * self.x[k]).sum(axis=1) >= combs_bool[k].sum(axis=1) * z[k],
                                  name='x > z ' + str(k))
