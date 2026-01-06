@@ -161,6 +161,7 @@ class SKWP:
                 if c.IISConstr: print(f'\t{c.constrname}: {self.model.getRow(c)} {c.Sense} {c.RHS}')
         if self.model.Status == GRB.UNBOUNDED:
             print('unbounded')
+        self.obj = self.model.getObjective()
 
         self.final_gap = self.model.MIPGap
         return self.model.objVal,  w.x

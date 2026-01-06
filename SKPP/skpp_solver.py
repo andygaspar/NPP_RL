@@ -140,7 +140,7 @@ class SKPP:
             self.model.computeIIS()
             for c in self.model.getConstrs():
                 if c.IISConstr: print(f'\t{c.constrname}: {self.model.getRow(c)} {c.Sense} {c.RHS}')
-
+        self.obj = self.model.getObjective()
         self.final_gap = self.model.MIPGap
         return self.model.objVal,  p.x
 
