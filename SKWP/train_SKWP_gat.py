@@ -16,8 +16,8 @@ print('Experiments running on', device)
 
 MIN_SIZE, MAX_SIZE = 15, 30
 
-SAVE = False
-file_name = 'SKWP/NET/test_' + str(MIN_SIZE) + '_' + str(MAX_SIZE) + '.pth'
+SAVE = True
+file_name = 'SKWP/NET/test_skwp_' + str(MIN_SIZE) + '_' + str(MAX_SIZE) + '.pth'
 
 M = range(MIN_SIZE, MAX_SIZE)
 K = range(MIN_SIZE, MAX_SIZE)
@@ -29,7 +29,7 @@ N_SAMPLES = 128
 ITERATIONS = 3000
 EPISODE_PER_BATCH = 16
 
-BASELINE_ITERATIONS = 10
+BASELINE_ITERATIONS = 100
 POPULATION = N_SAMPLES
 
 lr = 0.001

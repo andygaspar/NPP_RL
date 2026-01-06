@@ -16,7 +16,7 @@ print('Experiments running on', device)
 
 MIN_SIZE, MAX_SIZE = 10, 30
 
-SAVE = False
+SAVE = True
 file_name = 'SKPP/NET/test_skpp_' + str(MIN_SIZE) + '_' + str(MAX_SIZE) + '.pth'
 
 M = range(MIN_SIZE, MAX_SIZE)
