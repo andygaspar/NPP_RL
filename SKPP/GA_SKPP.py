@@ -25,7 +25,8 @@ class GA_SKPP:
         if init_population is None:
             self.population = np.random.uniform(0, self.instance.max_p, size=(self.pop_size + self.off_size, self.instance.L))
         else:
-            self.population = init_population
+            self.population = np.zeros((self.pop_size + self.off_size, self.instance.L))
+            self.population[: self.pop_size] = init_population
         self.time = time.time()
         self.fitness[:self.off_size], _ = self.solver.solve_skpp(self.population[:self.off_size])
         self.fitness[self.off_size: self.off_size * 2], _ = self.solver.solve_skpp(self.population[self.off_size: self.off_size * 2])

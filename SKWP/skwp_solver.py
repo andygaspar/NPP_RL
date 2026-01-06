@@ -21,6 +21,7 @@ class SKWP:
         self.c = problem.c
         self.obj = None
         self.time = None
+        self.final_gap = None
 
         self.x = self.model.addMVar((self.inst.K, self.inst.M), vtype=GRB.BINARY)
 
@@ -140,22 +141,6 @@ class SKWP:
                 name=f"profit_comp_k{k}"
             )
 
-        # for k in range(self.inst.K):
-        #
-        #     for c_idx, c in enumerate(combs[k]):
-        #         c_l = [i for i in c if i < self.inst.L]
-        #         c_f = [i for i in c if i >= self.inst.L]
-        #         self.model.addConstr(t[k][c_l].sum() + self.w[k][c_f].sum() <= self.c[k] + (1 - s[k][c_idx]) * self.w[k][c_f].sum(), name='w ' + str(c_idx))
-                # for q_idx, q in enumerate(combs[k]):
-        #             self.model.addConstr(
-        #                 self.p[k][list(c)].sum() >=
-        #                 self.p[k][list(q)].sum() - (1 - z[k][c_idx]) * M - (1 - s[k][c_idx]) * M,
-        #                 name = 'comb ' + str(c) + ' ' + str(q)
-        #             )
-
-
-
-
             for i in range(self.inst.L):
                 self.model.addConstr(t[k, i] <= self.x[k, i] * N, name='t < x ' + str(k) + ' ' + str(i))
                 self.model.addConstr(w[i] - t[k, i] <= (1 - self.x[k, i]) * N, name='p - t >  ' + str(k) + ' ' + str(i))
@@ -177,7 +162,7 @@ class SKWP:
         if self.model.Status == GRB.UNBOUNDED:
             print('unbounded')
 
-
+        self.final_gap = self.model.MIPGap
         return self.model.objVal,  w.x
 
 
