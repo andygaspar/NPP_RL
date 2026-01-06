@@ -14,7 +14,7 @@ device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 print('Experiments running on', device)
 
 
-MIN_SIZE, MAX_SIZE = 10, 30
+MIN_SIZE, MAX_SIZE = 20, 60
 
 SAVE = True
 file_name = 'SKPP/NET/test_skpp_' + str(MIN_SIZE) + '_' + str(MAX_SIZE) + '.pth'
@@ -26,7 +26,7 @@ SEED = 1
 HIDDEN = 64
 
 N_SAMPLES = 64
-ITERATIONS = 3000
+ITERATIONS = 200
 EPISODE_PER_BATCH = 16
 
 BASELINE_ITERATIONS = 100

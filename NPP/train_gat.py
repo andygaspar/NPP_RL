@@ -13,10 +13,10 @@ device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 print('Experiments running on', device)
 
 
-MIN_SIZE, MAX_SIZE = 15, 25
+MIN_SIZE, MAX_SIZE = 20, 90
 
 
-file_name = 'NPP/NET/test_' + str(MIN_SIZE) + '_' + str(MAX_SIZE) + '.pth'
+file_name = 'NPP/NET/test_npp_' + str(MIN_SIZE) + '_' + str(MAX_SIZE) + '.pth'
 
 N_COMM = range(MIN_SIZE, MAX_SIZE)
 N_PATHS = range(MIN_SIZE, MAX_SIZE)
@@ -25,7 +25,7 @@ SEED = 1
 HIDDEN = 64
 
 N_SAMPLES = 128
-ITERATIONS = 3000
+ITERATIONS = 400
 EPISODE_PER_BATCH = 128
 
 BASELINE_ITERATIONS = 100
