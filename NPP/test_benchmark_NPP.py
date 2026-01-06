@@ -26,7 +26,7 @@ N_RUNS = 10
 
 
 columns = ['run', 'commodities', 'paths',
-           'obj_exact', 'obj_nn_ga', 'obj_nn_sample', 'obj_ga',
+           'obj_exact', 'obj_nn_ga', 'obj_nn_sample', 'obj_nn_mean', 'obj_ga',
            'mip_GAP', 'status',
            'time_exact', 'time_nn_ga','time_nn', 'time_ga', 'case_num']
 
@@ -46,9 +46,11 @@ for case in CASES:
         samples = agent.get_distribution(instance, POPULATION)
 
         _, net_best_sample = instance.eval_sample(samples)
+        net_time = time.time() - net_time
+
         mean_val = instance.eval(agent.get_mean(instance))
 
-        net_time = time.time() - net_time
+
         ga_nn.run(BASELINE_ITERATIONS, init_population=instance.rescale_prices(samples))
         wins += ga.best_val <= ga_nn.best_val
         gaps += [ga_nn.best_val / ga.best_val] if ga.best_val > 0 else ([-1] if ga_nn.best_val > 0 else [-2])

@@ -14,7 +14,7 @@ device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 print('Experiments running on', device)
 
 
-MIN_SIZE, MAX_SIZE = 15, 30
+MIN_SIZE, MAX_SIZE = 20, 60
 
 SAVE = True
 file_name = 'SKWP/NET/test_skwp_' + str(MIN_SIZE) + '_' + str(MAX_SIZE) + '.pth'
@@ -52,6 +52,7 @@ for iteration in range(ITERATIONS):
     rand_wins, rand_gaps = 0, []
 
     for i, inst in enumerate(instances):
+        print(i, inst)
         mask = (batch.batch == i) * (batch.x[:, -1] == 1) # get only p controlled by the leader (i.e. x[:, -1 == 1) of the batch
         inst_sample_tensor = samples[:, mask]
         log_prices.append(log_probs[:, mask].flatten())

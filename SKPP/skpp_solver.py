@@ -12,13 +12,13 @@ class SKPP:
 
     def __init__(self, problem: SKPP_instance):
 
-        self.model = gb.Model("BilevelReformulation")
+        self.model = gb.Model()
 
         self.inst = problem
         self.p = problem.p
         self.obj = None
         self.time = None
-
+        self.final_gap = None
         self.x = self.model.addMVar((self.inst.K, self.inst.M), vtype=GRB.BINARY)
 
     @staticmethod
@@ -141,6 +141,7 @@ class SKPP:
             for c in self.model.getConstrs():
                 if c.IISConstr: print(f'\t{c.constrname}: {self.model.getRow(c)} {c.Sense} {c.RHS}')
 
+        self.final_gap = self.model.MIPGap
         return self.model.objVal,  p.x
 
 

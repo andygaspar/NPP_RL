@@ -25,7 +25,7 @@ class GA_SKWP:
         if init_population is None:
             self.population = np.random.uniform(0, self.instance.max_w, size=(self.pop_size + self.off_size, self.instance.L))
         else:
-            self.population = init_population
+            self.population = np.zeros((self.pop_size + self.off_size, self.instance.L))
         self.time = time.time()
         self.fitness[:self.off_size], _ = self.solver.solve_skwp(self.population[:self.off_size])
         self.fitness[self.off_size: self.off_size * 2], _ = self.solver.solve_skwp(self.population[self.off_size: self.off_size * 2])
