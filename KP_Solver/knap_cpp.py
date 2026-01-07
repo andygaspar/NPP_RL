@@ -4,6 +4,7 @@ import multiprocessing
 import os
 
 import numpy as np
+from networkx.algorithms.efficiency_measures import efficiency
 from numpy.ctypeslib import ndpointer
 
 
@@ -50,7 +51,6 @@ class KnapCpp:
 
         res = self.solve(p, self.w, self.c)
         sol = np.ctypeslib.as_array(res.contents.solution, shape=(self.pop_size, self.K, self.M))
-
         vals = ((self.p - p) * sol)[:, :, :self.L].sum(axis=-1).sum(axis=-1)
         self.lib.free_result(res)
         return vals, vals.max()

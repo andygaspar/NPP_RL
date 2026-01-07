@@ -19,7 +19,6 @@ def create_batch(instances, device=torch.device('cpu')):
     return batch
 
 
-
 class EGAT2(torch.nn.Module):
     def __init__(self, node_channels, edge_channels, hidden_channels=128, out_channels=2,
                  heads=4, dropout=0.3, lr=0.001, wd=1e-5, device=torch.device('cpu')):
@@ -33,6 +32,9 @@ class EGAT2(torch.nn.Module):
         self.dropout_init = dropout
         self.device = device
 
+        # Initialize best_gap
+        self.best_gap = None
+
         # ENHANCEMENT 1: Add skip connections to prevent over-smoothing
         self.skip1 = nn.Linear(node_channels, hidden_channels * heads)
         self.skip2 = nn.Linear(hidden_channels * heads, hidden_channels * (heads // 2))
@@ -42,7 +44,6 @@ class EGAT2(torch.nn.Module):
         self.norm2 = nn.LayerNorm(hidden_channels * (heads // 2))
 
         # ENHANCEMENT 3: Add edge feature projection - PROJECT TO SAME DIM AS edge_channels
-        # GATv2Conv expects edge_dim to match what was passed in initialization
         self.edge_proj = nn.Linear(edge_channels, edge_channels)  # Keep same dimension
 
         # ENHANCEMENT 4: Use fewer heads_init in later layers (prevent attention collapse)
@@ -50,45 +51,44 @@ class EGAT2(torch.nn.Module):
             in_channels=node_channels,
             out_channels=hidden_channels,
             heads=heads,
-            edge_dim=edge_channels,  # This MUST match the actual edge_attr dimension
+            edge_dim=edge_channels,
             dropout=dropout,
             concat=True,
-            add_self_loops=True  # Helps isolated nodes
+            add_self_loops=True
         )
 
         # ENHANCEMENT 5: Add residual connection
         self.conv2 = GATv2Conv(
             in_channels=hidden_channels * heads,
             out_channels=hidden_channels,
-            heads=heads // 2,  # Reduce heads_init
-            edge_dim=edge_channels,  # Same edge dimension
+            heads=heads // 2,  # Reduce heads
+            edge_dim=edge_channels,
             dropout=dropout,
             concat=True
         )
 
-        # ENHANCEMENT 6: Separate heads_init for mu and sigma
-        self.mu_head = GATv2Conv(
+        # ENHANCEMENT 6: Separate heads for mu and sigma
+        self.conv_mu = GATv2Conv(
             in_channels=hidden_channels * (heads // 2),
             out_channels=1,
             heads=1,
-            edge_dim=edge_channels,  # Same edge dimension
+            edge_dim=edge_channels,
             dropout=dropout,
             concat=False
         )
 
-        self.sigma_head = GATv2Conv(
+        self.conv_sigma = GATv2Conv(
             in_channels=hidden_channels * (heads // 2),
             out_channels=1,
             heads=1,
-            edge_dim=edge_channels,  # Same edge dimension
+            edge_dim=edge_channels,
             dropout=dropout,
             concat=False
         )
 
-        # ENHANCEMENT 7: Add node type embedding (if you have path nodes vs other nodes)
-        # But we need to update node_channels accordingly
-        self.has_node_type = False  # We'll check this in forward
-        self.node_type_embed = nn.Embedding(2, 8)  # Smaller embedding
+        # ENHANCEMENT 7: Add node type embedding
+        self.has_node_type = False
+        self.node_type_embed = nn.Embedding(2, 8)
 
         # ENHANCEMENT 9: Output scaling parameters (learnable)
         self.mu_scale = nn.Parameter(torch.tensor(1.0))
@@ -102,23 +102,18 @@ class EGAT2(torch.nn.Module):
     def forward(self, batch, n_samples=1, return_attention=False):
         x, edge_index, edge_attr = batch.x, batch.edge_index, batch.edge_attr
 
-
-
         self.has_node_type = False
         x_combined = x[:, :self.node_channels]
 
-
-        edge_attr_proj = self.edge_proj(edge_attr)  # Simple projection
+        edge_attr_proj = self.edge_proj(edge_attr)
 
         # First GATv2 layer with skip connection
         x1 = self.conv1(x_combined, edge_index, edge_attr=edge_attr_proj)
 
-        # Skip connection from original node features (not including type embedding)
-
+        # Skip connection from original node features
         skip_input = x_combined
-
         x1_skip = self.skip1(skip_input)
-        x1 = x1 + x1_skip  # Skip connection
+        x1 = x1 + x1_skip
         x1 = F.elu(self.norm1(x1))
         x1 = F.dropout(x1, p=self.dropout_init, training=self.training)
 
@@ -128,19 +123,19 @@ class EGAT2(torch.nn.Module):
         # Ensure shapes match
         if x2_skip.shape[1] != x2.shape[1]:
             x2_skip = F.pad(x2_skip, (0, x2.shape[1] - x2_skip.shape[1]))
-        x2 = x2 + x2_skip  # Skip connection
+        x2 = x2 + x2_skip
         x2 = F.elu(self.norm2(x2))
         x2 = F.dropout(x2, p=self.dropout_init, training=self.training)
 
-        # Separate heads_init for mu and sigma
-        mu_raw = self.mu_head(x2, edge_index, edge_attr=edge_attr_proj).squeeze(-1)
-        sigma_raw = self.sigma_head(x2, edge_index, edge_attr=edge_attr_proj).squeeze(-1)
+        # Separate heads for mu and sigma
+        mu_raw = self.conv_mu(x2, edge_index, edge_attr=edge_attr_proj).squeeze(-1)
+        sigma_raw = self.conv_sigma(x2, edge_index, edge_attr=edge_attr_proj).squeeze(-1)
 
-        # ENHANCEMENT 10: Apply different activations with learnable scaling
+        # Apply different activations with learnable scaling
         mu = 0.5 + 0.5 * torch.tanh(self.mu_scale * mu_raw + self.mu_bias)
 
-        # ENHANCEMENT 11: Ensure sigma has sufficient range
-        sigma = 0.01 + 0.49 * torch.sigmoid(sigma_raw)  # sigma in [0.01, 0.5]
+        # Ensure sigma has sufficient range
+        sigma = 0.01 + 0.49 * torch.sigmoid(sigma_raw)
 
         # Sampling
         eps = torch.randn((n_samples, len(mu)), device=mu.device)
@@ -153,8 +148,6 @@ class EGAT2(torch.nn.Module):
         log_probs = self.truncated_normal_log_prob(
             samples, mu_expanded, sigma_expanded, low=0, high=1
         )
-
-
 
         return samples, log_probs, mu
 
@@ -179,7 +172,7 @@ class EGAT2(torch.nn.Module):
             batch = batch.to(self.device)
         with torch.no_grad():
             sample, _, _ = self.forward(batch, n_samples)
-            mask = batch.x[:, -1] == 1  # get only paths (i.e. x[:, -1 == 1) of the batch
+            mask = batch.x[:, -1] == 1
             return sample[:, mask]
 
     def get_mean(self, instance):
@@ -188,15 +181,12 @@ class EGAT2(torch.nn.Module):
             batch = batch.to(self.device)
         with torch.no_grad():
             _, _, mu = self.forward(batch, 1)
-            mask = batch.x[:, -1] == 1  # get only paths (i.e. x[:, -1 == 1) of the batch
+            mask = batch.x[:, -1] == 1
             return mu[mask]
 
     def train_policy(self, log_action, reward, baseline):
-
         if reward.max() > 0:
             advantage = reward - baseline
-
-            # Normalize advantage for stability
             if advantage.std() > 0:
                 advantage = (advantage - advantage.mean()) / (advantage.std() + 1e-8)
         else:
@@ -212,58 +202,103 @@ class EGAT2(torch.nn.Module):
         return loss.item()
 
     def save(self, path):
-
+        """Save model with all necessary parameters"""
         os.makedirs(os.path.dirname(os.path.abspath(path)), exist_ok=True)
 
         save_dict = {
             'model_state_dict': self.state_dict(),
             'optimizer_state_dict': self.optimizer.state_dict(),
             'model_config': {
-                'hidden_init': self.conv1.out_channels * self.conv1.heads,
-                'out_channels': 2,
+                # Get actual dimensions from the model layers
+                'hidden_channels': self.conv1.out_channels * self.conv1.heads,
+                'out_channels': self.conv_mu.out_channels,  # Changed from conv3 to conv_mu
                 'lr': self.optimizer.param_groups[0]['lr'],
                 'wd': self.optimizer.param_groups[0]['weight_decay'],
-                'heads_init': self.conv1.heads,
-                'dropout_init': self.dropout_init
+                'heads': self.conv1.heads,
+                'dropout': self.dropout_init
             },
-            'init_params': {'node_channels': self.node_channels, 'edge_channels': self.edge_channels,
-                            'hidden_init': self.hidden_init, 'output_init': self.output_init,
-                            'heads_init': self.heads_init, 'dropout_init': self.dropout_init,
-                            'best_gap': self.best_gap
-                            },
+            'init_params': {
+                'node_channels': self.node_channels,
+                'edge_channels': self.edge_channels,
+                'hidden_init': self.hidden_init,
+                'output_init': self.output_init,
+                'heads_init': self.heads_init,
+                'dropout_init': self.dropout_init,
+                'best_gap': self.best_gap
+            },
         }
 
         torch.save(save_dict, path)
 
     def load(self, path, device=None):
+        """Load model from checkpoint"""
         if device is None:
             device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
-        net = torch.load(path, map_location=device, weights_only=False)
+        # Load checkpoint
+        checkpoint = torch.load(path, map_location=device, weights_only=False)
+
+        # Update device
         self.device = device
 
-        # Carica i pesi del modello
-        self.load_state_dict(net['model_state_dict'])
+        # Load model state dict
+        self.load_state_dict(checkpoint['model_state_dict'])
 
-        # Carica lo stato dell'ottimizzatore
-        self.optimizer.load_state_dict(net['optimizer_state_dict'])
+        # Load optimizer state dict
+        if 'optimizer_state_dict' in checkpoint:
+            self.optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
+
+        # Load best_gap if available
+        if 'init_params' in checkpoint and 'best_gap' in checkpoint['init_params']:
+            self.best_gap = checkpoint['init_params']['best_gap']
+
+        # Move model to device
         self.to(device)
 
-        print(f"Modello caricato da: {path}")
-        print(f"Modello spostato su: {device}")
+        print(f"Model loaded from: {path}")
+        print(f"Model moved to: {device}")
 
-        return net
+        return checkpoint
 
-def load_agent(path, device=None) -> EGAT2:
+
+def load_agent_2(path, device=None) -> EGAT2:
+    """Create and load an agent from checkpoint"""
     if device is None:
         device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
-    init_params = torch.load(path, map_location=device, weights_only=False)['init_params']
-    agent = EGAT2(node_channels=init_params['node_channels'], edge_channels=init_params['edge_channels'],
-                 hidden_init=init_params['hidden_init'], out_channels=init_params['output_init'],
-                 heads=init_params['heads_init'], dropout=init_params['dropout_init'])
-    agent.best_gap = init_params['best_gap']
-    agent.load(path, device=device)
+    # Load checkpoint
+    checkpoint = torch.load(path, map_location=device, weights_only=False)
+
+    # Extract initialization parameters
+    init_params = checkpoint['init_params']
+
+    # Create agent with initialization parameters
+    agent = EGAT2(
+        node_channels=init_params['node_channels'],
+        edge_channels=init_params['edge_channels'],
+        hidden_channels=init_params['hidden_init'],  # Note: using hidden_init
+        out_channels=init_params['output_init'],  # Note: using output_init
+        heads=init_params['heads_init'],  # Note: using heads_init
+        dropout=init_params['dropout_init'],  # Note: using dropout_init
+        device=device
+    )
+
+    # Copy best_gap if available
+    if 'best_gap' in init_params:
+        agent.best_gap = init_params['best_gap']
+
+    # Load the model weights
+    agent.load_state_dict(checkpoint['model_state_dict'])
+
+    # Load optimizer state if available
+    if 'optimizer_state_dict' in checkpoint:
+        agent.optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
+
+    # Move to device
+    agent.to(device)
+
+    print(f"Agent loaded from: {path}")
+
     return agent
 
 

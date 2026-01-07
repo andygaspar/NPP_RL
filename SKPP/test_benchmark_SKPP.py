@@ -5,19 +5,19 @@ import pandas as pd
 from SKPP.SKPP_graph_instance import SKPPGraph
 from SKPP.GA_SKPP import GA_SKPP
 from GAT.gat import load_agent
+# from GAT.gat_2 import load_agent_2
 from SKPP.skpp_solver import SKPP
 
-file_name = 'SKPP/NET/test_skpp_10_30.pth'
+file_name = 'SKPP/NET/test_skpp_10_30_fede.pth'
 # df_exact = pd.read_csv('NPP/Results/exact_results.csv')
 
 agent = load_agent(file_name)
 device = agent.device
 
-BASELINE_ITERATIONS = 1000
+BASELINE_ITERATIONS = 10
 POPULATION = 128
 
 TIME_LIMIT = 1800
-
 
 CASES = [(10, 10), (15, 15), (20, 20), (30, 30), (60, 60), (90, 90), (10, 90), (90, 10)]
 SOLVER_CASES = [(10, 10), (15, 15)]
@@ -25,11 +25,10 @@ case_num = dict(zip(CASES, range(len(CASES))))
 
 N_RUNS = 10
 
-
 columns = ['run', 'commodities', 'paths',
-           'obj_exact', 'obj_nn_ga', 'obj_nn_sample',  'obj_nn_mean',  'obj_ga',
+           'obj_exact', 'obj_nn_ga', 'obj_nn_sample', 'obj_nn_mean', 'obj_ga',
            'mip_GAP', 'status',
-           'time_exact', 'time_nn_ga','time_nn', 'time_ga', 'case_num']
+           'time_exact', 'time_nn_ga', 'time_nn', 'time_ga', 'case_num']
 
 df = pd.DataFrame(columns=columns)
 
@@ -55,14 +54,14 @@ for case in CASES:
         ga_nn.run(BASELINE_ITERATIONS, init_population=instance.rescale_p(samples))
         wins += ga.best_val <= ga_nn.best_val
         gaps += [ga_nn.best_val / ga.best_val] if ga.best_val > 0 else ([-1] if ga_nn.best_val > 0 else [-2])
-
+        print(ga_nn.best_val / ga.best_val)
         if case in SOLVER_CASES:
-            solver = SKPP(instance)
-            obj, sol = solver.solve(verbose = False)
+            solver = SKPP(instance, time_limit=TIME_LIMIT)
+            obj, sol = solver.solve(verbose=True)
             solver_time, solver_obj, solver_final_gap, solver_status = (
                 solver.time, solver.obj, solver.final_gap, solver.model.status)
         else:
-            solver_time, solver_obj, solver_final_gap, solver_status = [-1]*4
+            solver_time, solver_obj, solver_final_gap, solver_status = [-1] * 4
 
         exact_gaps += [ga_nn.best_val / solver_obj]
         df.loc[df.shape[0]] = [run, comm, paths,
@@ -72,5 +71,3 @@ for case in CASES:
 
     print(paths, comm, wins / N_RUNS, np.mean(gaps), np.mean(exact_gaps))
     df.to_csv('SKPP/Results/test_.csv')
-
-

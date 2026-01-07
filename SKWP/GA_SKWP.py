@@ -49,10 +49,10 @@ class GA_SKWP:
 
                 # Add small mutation (5% chance per gene)
                 mutation_mask = np.random.random(self.population.shape[1]) < 0.02
-                percentage = self.instance.max_w * 0.05
+                percentage = self.instance.max_w * 0.5
                 delta = np.random.uniform(-percentage, percentage, size=self.population.shape[1])
                 mutation_values = self.population[indices[self.pop_size + i]] + delta
-                self.population[indices[self.pop_size + i]][mutation_mask] += mutation_values[mutation_mask]
+                self.population[indices[self.pop_size + i]][mutation_mask] = mutation_values[mutation_mask]
                 self.population[indices[self.pop_size + i]] = (
                     np.clip(self.population[indices[self.pop_size + i]], 0, self.instance.max_w))  # Keep within bounds
 

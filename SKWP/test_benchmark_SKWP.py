@@ -7,20 +7,21 @@ from SKWP.GA_SKWP import GA_SKWP
 from GAT.gat import load_agent
 from SKWP.skwp_solver import SKWP
 
-file_name = 'SKWP/NET/test_skwp_15_30.pth'
+file_name = 'SKWP/NET/test_skwp_10_30_fede.pth'
 # df_exact = pd.read_csv('NPP/Results/exact_results.csv')
 
 agent = load_agent(file_name)
 device = agent.device
 
-BASELINE_ITERATIONS = 1000
-POPULATION = 128
+BASELINE_ITERATIONS = 1
+POPULATION = 2
 
 TIME_LIMIT = 1800
 
 
 CASES = [(10, 10), (15, 15), (20, 20), (30, 30), (60, 60), (90, 90), (10, 90), (90, 10)]
 SOLVER_CASES = [(10, 10), (15, 15)]
+SOLVER_CASES = []
 case_num = dict(zip(CASES, range(len(CASES))))
 
 N_RUNS = 10
@@ -55,7 +56,7 @@ for case in CASES:
         ga_nn.run(BASELINE_ITERATIONS, init_population=instance.rescale_w(samples))
         wins += ga.best_val <= ga_nn.best_val
         gaps += [ga_nn.best_val / ga.best_val] if ga.best_val > 0 else ([-1] if ga_nn.best_val > 0 else [-2])
-
+        print(ga_nn.best_val / ga.best_val)
 
         if case in SOLVER_CASES:
             solver = SKWP(instance)

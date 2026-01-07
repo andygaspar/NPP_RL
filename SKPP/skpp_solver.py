@@ -1,18 +1,18 @@
 import time
 
 import gurobipy as gb
-from gurobipy import GRB
+from gurobipy import GRB, Model
 import numpy as np
-from scipy._lib.cobyqa import problem
+
 
 from SKPP.skpp_instance import SKPP_instance
 
 
 class SKPP:
 
-    def __init__(self, problem: SKPP_instance):
+    def __init__(self, problem: SKPP_instance, time_limit=None):
 
-        self.model = gb.Model()
+        self.model = Model()
 
         self.inst = problem
         self.p = problem.p
@@ -20,6 +20,8 @@ class SKPP:
         self.time = None
         self.final_gap = None
         self.x = self.model.addMVar((self.inst.K, self.inst.M), vtype=GRB.BINARY)
+        if time_limit is not None:
+            self.model.setParam('TimeLimit', time_limit)
 
     @staticmethod
     def maximal_combinations_final(weights, capacity):
@@ -68,17 +70,16 @@ class SKPP:
         combs = {}
         combs_bool = {}
         z = {}
-        N = self.p[:, :self.inst.L].max()
-        M = self.p.max() * self.inst.M
+        N = self.p[:, self.inst.L].max()
         p = self.model.addMVar(self.inst.L)
         t = self.model.addMVar((self.inst.K, self.inst.L))
         for k in range(self.inst.K):
             combs_k = self.maximal_combinations_final(self.inst.w[k].tolist(), self.inst.c[k])
-            combs[k] = self.remove_sub_optimal(combs_k, k)
+            combs[k] = combs_k
+            # combs[k] = self.remove_sub_optimal(combs_k, k)
             combs_bool[k] = np.zeros((len(combs[k]), self.inst.M), dtype=bool)
             for c_idx, c in enumerate(combs[k]):
                 combs_bool[k][c_idx, c] = True
-
             z[k] = self.model.addMVar(len(combs[k]), vtype=GRB.BINARY)
 
             self.model.addConstr(z[k].sum() == 1, name='z ' + str(k))
@@ -88,12 +89,14 @@ class SKPP:
                                  combs_bool[k].sum(axis=1) + (1 - z[k]) * (self.inst.M - combs_bool[k].sum(axis=1)),
                                  name='x < z ' + str(k))
 
-            constant_part = combs_bool[k][:, self.inst.L:] @ self.p[k, self.inst.L:]  # numpy array
-            variable_part = combs_bool[k][:, :self.inst.L] @ t[k]  # MVar
+            constant_part = combs_bool[k][:, self.inst.L:] @ self.p[k, self.inst.L:]
+            t_variable_part = combs_bool[k][:, :self.inst.L] @ t[k]
+            p_variable_part = combs_bool[k][:, :self.inst.L] @ p# MVar
 
             # Combine: numpy array + MVar = MVar
-            constr_expr = constant_part + variable_part
-            n_combs = constr_expr.shape[0]
+            t_expr = constant_part + t_variable_part
+            p_expr = constant_part + p_variable_part
+            n_combs = t_expr.shape[0]
 
             # Pre-calculate size
             total_pairs = n_combs * (n_combs - 1)
@@ -108,18 +111,21 @@ class SKPP:
             j_indices = j_indices[mask]
 
             # Initialize coefficient matrix
-            coeff_matrix = np.zeros((total_pairs, n_combs))
+            p_matrix = np.zeros((total_pairs, n_combs))
 
             # Fill using vectorized operations
             row_indices = np.arange(total_pairs)
-            coeff_matrix[row_indices, i_indices] = 1
-            coeff_matrix[row_indices, j_indices] = -1
+            p_matrix[row_indices, j_indices] = -1
 
-            bigM_terms = np.zeros((total_pairs, n_combs))
-            bigM_terms[row_indices, i_indices] = M  # Coefficient for z[i]
+            t_matrix = np.zeros((total_pairs, n_combs))
+            t_matrix[row_indices, i_indices] = 1  # Coefficient for z[i]
+            # M_matrix = np.zeros((total_pairs, n_combs))
+            # M_matrix[row_indices, i_indices] = 1
+
+            M = (combs_bool[k] @ self.p[k]).max()
 
             # Add constraints
-            self.model.addConstr(coeff_matrix @ constr_expr - bigM_terms @ z[k] >= -M)
+            self.model.addConstr(t_matrix @ t_expr + p_matrix @ p_expr - M * t_matrix @ z[k] >= -M, name='p max ' + str(k))
 
             for i in range(self.inst.L):
                 self.model.addConstr(t[k, i] <= self.x[k, i] * N, name='t < x ' + str(k) + ' ' + str(i))
@@ -135,7 +141,7 @@ class SKPP:
 
         self.model.optimize()
         self.time = time.time() - tt
-        self.obj = self.model.objVal
+
         if self.model.Status == GRB.INFEASIBLE:
             self.model.computeIIS()
             for c in self.model.getConstrs():
