@@ -66,10 +66,10 @@ for iteration in range(ITERATIONS):
         baselines += [g.best_val for _ in range(inst.L * N_SAMPLES)]
 
         # rewards.append([g_nn.best_val for _ in range(inst.L * N_SAMPLES)])
-        vals, agent_best_val = inst.eval_sample(inst_sample_tensor, METHOD)
+        vals, agent_best_val = inst.eval_sample(inst_sample_tensor, method=METHOD)
         rewards += np.repeat(vals, inst.L).tolist()
 
-        random_best_val = inst.random_baseline(N_SAMPLES)
+        random_best_val = inst.random_baseline(N_SAMPLES, method=METHOD)
 
         wins += g.best_val < agent_best_val
         gaps += [agent_best_val/g.best_val if g.best_val > 0 else 0]

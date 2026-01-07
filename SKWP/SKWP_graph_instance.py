@@ -94,14 +94,18 @@ class SKWPGraph(SKWP_instance):
 
     def eval(self, w: torch.Tensor, method='e'):
         w = torch.stack([w] * 2)
-        _, val = self.eval_sample(w,method)
+        _, val = self.eval_sample(w, method)
         return val
 
-    def random_baseline(self, sample_size):
+    def random_baseline(self, sample_size, method='e'):
         random_sol = np.random.uniform(0, self.max_w, (sample_size, self.L))
         from KP_Solver.knap_cpp import KnapCpp
         bb = KnapCpp(self, pop_size=sample_size)
-        _, max_val = bb.solve_skwp(random_sol)
+        if method == 'e':
+            print('DEBUG')
+            _, max_val =  bb.solve_skwp(random_sol)
+        else:
+            _, max_val =  bb.solve_skwp_greedy(random_sol)
         return max_val
 
 

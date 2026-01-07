@@ -7,19 +7,21 @@ from SKWP.GA_SKWP import GA_SKWP
 from GAT.gat import load_agent
 from SKWP.skwp_solver import SKWP
 
-file_name = 'SKWP/NET/test_skwp_10_30_fede.pth'
+file_name = 'SKWP/NET/test_skwp_10_30___.pth'
 # df_exact = pd.read_csv('NPP/Results/exact_results.csv')
 
 agent = load_agent(file_name)
 device = agent.device
 
-BASELINE_ITERATIONS = 1
-POPULATION = 2
+BASELINE_ITERATIONS = 100
+POPULATION = 128
 
 TIME_LIMIT = 1800
-
+METHOD = 'g'
 
 CASES = [(10, 10), (15, 15), (20, 20), (30, 30), (60, 60), (90, 90), (10, 90), (90, 10)]
+# CASES = [(60, 60), (90, 90), (10, 90), (90, 10)]
+
 SOLVER_CASES = [(10, 10), (15, 15)]
 SOLVER_CASES = []
 case_num = dict(zip(CASES, range(len(CASES))))
@@ -41,17 +43,17 @@ for case in CASES:
         np.random.seed(run)
         instance = SKWPGraph(paths, comm)
 
-        ga = GA_SKWP(instance, pop_size=POPULATION)
+        ga = GA_SKWP(instance, pop_size=POPULATION, method=METHOD)
         ga.run(BASELINE_ITERATIONS)
 
-        ga_nn = GA_SKWP(instance, pop_size=POPULATION)
+        ga_nn = GA_SKWP(instance, pop_size=POPULATION, method=METHOD)
         net_time = time.time()
         samples = agent.get_distribution(instance, POPULATION)
 
-        _, net_best_sample = instance.eval_sample(samples)
+        _, net_best_sample = instance.eval_sample(samples, method=METHOD)
         net_time = time.time() - net_time
 
-        mean_val = instance.eval(agent.get_mean(instance))
+        mean_val = instance.eval(agent.get_mean(instance), method=METHOD)
 
         ga_nn.run(BASELINE_ITERATIONS, init_population=instance.rescale_w(samples))
         wins += ga.best_val <= ga_nn.best_val
