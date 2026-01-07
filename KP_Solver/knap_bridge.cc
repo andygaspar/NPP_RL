@@ -4,6 +4,7 @@
 #include <cmath>
 #include <stack>
 #include <omp.h>
+#include <cstring>
 
 
 struct results {
@@ -153,5 +154,100 @@ extern "C" {
 
     void free_result(results* res){
         delete[] res -> solution;
+    }
+
+    void solve_greedy_(const double* p, const double* w, const double* c, double* vals, int M, int K, int P, int L, int num_procs) {
+    // Allocate output array
+        omp_set_num_threads(num_procs);
+//        double* vals = new double[P];
+
+#pragma omp parallel
+    {
+        // Thread-local storage
+        std::vector<int> indices(M);
+        std::vector<uint8_t> selected(M);  // uint8_t instead of bool (vector<bool> is slow)
+
+        #pragma omp for schedule(static)
+        for (int i = 0; i < P; ++i) {
+            double sum_i = 0.0;
+            const double* p_i = p + i * K * M;
+            const double* w_i = w + i * K * M;
+            const double* c_i = c + i * K;
+
+            for (int j = 0; j < K; ++j) {
+                int base_idx = j * M;
+                double capacity = c_i[j];
+
+                // Initialize indices - unroll small loops
+                for (int k = 0; k < M; ++k) indices[k] = k;
+
+                // Sort by efficiency - use a more cache-friendly approach for small M
+                // For small M, insertion sort can be faster
+                if (M <= 32) {
+                    // Insertion sort (good for small arrays)
+                    for (int k = 1; k < M; ++k) {
+                        int key_idx = indices[k];
+                        double key_eff = p_i[base_idx + key_idx] / (w_i[base_idx + key_idx] + 1e-12);
+                        int s = k - 1;
+                        while (s >= 0 &&
+                               (p_i[base_idx + indices[s]] / (w_i[base_idx + indices[s]] + 1e-12)) < key_eff) {
+                            indices[s + 1] = indices[s];
+                            s--;
+                        }
+                        indices[s + 1] = key_idx;
+                    }
+                } else {
+                    // Use std::sort with a more efficient comparator
+                    std::sort(indices.begin(), indices.end(),
+                             [base_idx, p_i, w_i](int a, int b) {
+                                 // Pre-compute to avoid repeating divisions
+                                 double eff_a = p_i[base_idx + a];
+                                 double w_a = w_i[base_idx + a] + 1e-12;
+                                 double eff_b = p_i[base_idx + b];
+                                 double w_b = w_i[base_idx + b] + 1e-12;
+                                 // Compare a/b > c/d as a*d > c*b to avoid divisions
+                                 return eff_a * w_b > eff_b * w_a;
+                             });
+                }
+
+                // Reset selected using memset for speed
+                memset(selected.data(), 0, M * sizeof(uint8_t));
+
+                // Greedy selection with early exit
+                double cumulative = 0.0;
+                for (int s = 0; s < M; ++s) {
+                    int orig_idx = indices[s];
+                    double weight = w_i[base_idx + orig_idx];
+
+                    // Early exit if even the smallest weight would exceed capacity
+                    // (assuming weights are positive)
+                    if (cumulative + weight >= capacity) {
+                        break;
+                    }
+
+                    selected[orig_idx] = 1;
+                    cumulative += weight;
+                }
+
+                // Sum first L selected items - unroll if L is small
+                double sum_ij = 0.0;
+                if (L <= 8) {
+                    // Small unrolled loop
+                    for (int k = 0; k < L; ++k) {
+                        sum_ij += selected[k] ? w_i[base_idx + k] : 0.0;
+                    }
+                } else {
+                    // Regular loop
+                    for (int k = 0; k < L; ++k) {
+                        if (selected[k]) {
+                            sum_ij += w_i[base_idx + k];
+                        }
+                    }
+                }
+                sum_i += sum_ij;
+            }
+            vals[i] = sum_i;
+        }
+    }
     }
 }

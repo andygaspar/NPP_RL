@@ -51,6 +51,7 @@ class EGAT(torch.nn.Module):
             heads=heads,
             edge_dim=edge_channels,
             dropout=dropout,
+            add_self_loops=True,
             concat=True
         )
 
@@ -60,6 +61,7 @@ class EGAT(torch.nn.Module):
             heads=heads,
             edge_dim=edge_channels,
             dropout=dropout,
+            add_self_loops=True,
             concat=True
         )
 
@@ -69,6 +71,7 @@ class EGAT(torch.nn.Module):
             heads=1,  # Single head for output
             edge_dim=edge_channels,
             dropout=dropout,
+            add_self_loops=True,
             concat=False  # Don't concat for final layer
         )
 

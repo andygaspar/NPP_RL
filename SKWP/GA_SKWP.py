@@ -8,7 +8,7 @@ from SKWP.skwp_instance import SKWP_instance
 
 
 class GA_SKWP:
-    def __init__(self, instance: SKWP_instance, pop_size):
+    def __init__(self, instance: SKWP_instance, pop_size, method='e'):
 
         self.instance = instance
         self.pop_size = pop_size
@@ -21,14 +21,16 @@ class GA_SKWP:
         self.avg_fitness = None
         self.time = None
 
+        self.solver_fun = self.solver.solve_skwp if method == 'e' else self.solver.solve_skwp_greedy
+
     def run(self, iterations, init_population=None, verbose=False):
         if init_population is None:
             self.population = np.random.uniform(0, self.instance.max_w, size=(self.pop_size + self.off_size, self.instance.L))
         else:
             self.population = np.zeros((self.pop_size + self.off_size, self.instance.L))
         self.time = time.time()
-        self.fitness[:self.off_size], _ = self.solver.solve_skwp(self.population[:self.off_size])
-        self.fitness[self.off_size: self.off_size * 2], _ = self.solver.solve_skwp(self.population[self.off_size: self.off_size * 2])
+        self.fitness[:self.off_size], _ = self.solver_fun(self.population[:self.off_size])
+        self.fitness[self.off_size: self.off_size * 2], _ = self.solver_fun(self.population[self.off_size: self.off_size * 2])
 
         # Sort indices by fitness (descending)
         indices = np.argsort(self.fitness)[::-1]
@@ -56,7 +58,7 @@ class GA_SKWP:
                 self.population[indices[self.pop_size + i]] = (
                     np.clip(self.population[indices[self.pop_size + i]], 0, self.instance.max_w))  # Keep within bounds
 
-            self.fitness[indices[self.pop_size:]], _ = self.solver.solve_skwp(self.population[indices[self.pop_size:]])
+            self.fitness[indices[self.pop_size:]], _ = self.solver_fun(self.population[indices[self.pop_size:]])
             indices = np.argsort(self.fitness)[::-1]
 
             # Print progress

@@ -82,15 +82,19 @@ class SKWPGraph(SKWP_instance):
     def rescale_w(self, t: torch.Tensor) -> np.ndarray:
         return np.ascontiguousarray(t.detach().to('cpu').numpy()) * self.max_w
 
-    def eval_sample(self, sample_tensor: torch.Tensor):
+    def eval_sample(self, sample_tensor: torch.Tensor, method='e'):
         w = self.rescale_w(sample_tensor)
         from KP_Solver.knap_cpp import KnapCpp
         bb = KnapCpp(self, pop_size=sample_tensor.shape[0])
-        return bb.solve_skwp(w)
+        if method == 'e':
+            print('DEBUG')
+            return bb.solve_skwp(w)
+        else:
+            return bb.solve_skwp_greedy(w)
 
-    def eval(self, w: torch.Tensor):
+    def eval(self, w: torch.Tensor, method='e'):
         w = torch.stack([w] * 2)
-        _, val = self.eval_sample(w)
+        _, val = self.eval_sample(w,method)
         return val
 
     def random_baseline(self, sample_size):

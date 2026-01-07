@@ -15,6 +15,8 @@ device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 print('Experiments running on', device)
 
 
+METHOD = 'g'
+
 MIN_SIZE, MAX_SIZE = 10, 30
 
 SAVE = True
@@ -26,16 +28,16 @@ SEED = 1
 
 HIDDEN = 64
 
-N_SAMPLES = 32
-ITERATIONS = 200
-EPISODE_PER_BATCH = 16
+N_SAMPLES = 128
+ITERATIONS = 400
+EPISODE_PER_BATCH = 128
 
-BASELINE_ITERATIONS = 50
+BASELINE_ITERATIONS = 100
 POPULATION = N_SAMPLES
 
 lr = 0.001
 wd = 0.0001
-agent = EGAT2(6, 4, HIDDEN, 2, lr=lr, wd=wd, device=device)
+agent = EGAT(6, 4, HIDDEN, 2, lr=lr, wd=wd, device=device)
 
 BEST_GAP = 0
 t = time.time()
@@ -59,12 +61,12 @@ for iteration in range(ITERATIONS):
         inst_sample_tensor = samples[:, mask]
         log_prices.append(log_probs[:, mask].flatten())
 
-        g = GA_SKWP(inst, pop_size=POPULATION)
+        g = GA_SKWP(inst, pop_size=POPULATION, method=METHOD)
         g.run(BASELINE_ITERATIONS)
         baselines += [g.best_val for _ in range(inst.L * N_SAMPLES)]
 
         # rewards.append([g_nn.best_val for _ in range(inst.L * N_SAMPLES)])
-        vals, agent_best_val = inst.eval_sample(inst_sample_tensor)
+        vals, agent_best_val = inst.eval_sample(inst_sample_tensor, METHOD)
         rewards += np.repeat(vals, inst.L).tolist()
 
         random_best_val = inst.random_baseline(N_SAMPLES)
