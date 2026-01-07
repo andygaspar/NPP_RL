@@ -167,3 +167,77 @@ class SKWP:
         return self.model.objVal,  w.x
 
 
+
+
+class SKWP_greedy:
+
+    def __init__(self, problem: SKWP_instance):
+
+        self.model = gb.Model("SKWP")
+
+        self.inst = problem
+        self.p = problem.p
+        self.w = problem.w
+        self.c = problem.c
+        self.obj = None
+        self.time = None
+        self.final_gap = None
+
+        self.x = self.model.addMVar((self.inst.K, self.inst.M), vtype=GRB.BINARY)
+
+
+    def solve(self, verbose=False):
+        if not verbose:
+            self.model.setParam('OutputFlag', 0)
+        tt = time.time()
+
+        w = self.model.addMVar(self.inst.L)
+        t = self.model.addMVar((self.inst.K, self.inst.L))
+        for k in range(self.inst.K):
+
+            self.model.addConstr(t[k].sum() + (self.w[k, :self.inst.L] * self.x[k, :self.inst.L]).sum()
+                                 <= self.c[k], name='cap' + str(k))
+
+            for i in range(self.inst.L):
+                self.model.addConstr(t[k, i] <= self.x[k, i] * self.c[k], name='t < x ' + str(k) + ' ' + str(i))
+                self.model.addConstr(w[i] - t[k, i] <= (1 - self.x[k, i]) * self.c[k], name='p - t >  ' + str(k) + ' ' + str(i))
+                self.model.addConstr(t[k, i] <= w[i], name='t < p ' + str(k) + ' ' + str(i))
+
+                for j in range(self.inst.L):
+                    self.model.addConstr(t[k, i] / self.p[k, i] <= t[k, j] / self.p[k, j] + (1 - self.x[k, j]) * self.c[k],
+                                         name='t < p ' + str(k) + ' ' + str(j) + ' ' + str(i) )
+
+                for j in range(self.inst.L, self.inst.M):
+                    self.model.addConstr(t[k, i] / self.p[k, i] <= self.w[k, j] / self.p[k, j] + (1 - self.x[k, j]) * self.c[k],
+                                         name='t < p ' + str(k) + ' ' + str(j) + ' ' + str(i) )
+
+            for i in range(self.inst.L, self.inst.M):
+                for j in range(self.inst.L):
+                    self.model.addConstr(self.w[k, i] / self.p[k, i] <= t[k, j] / self.p[k, j] + (1 - self.x[k, j]) * self.c[k],
+                                         name='t < p ' + str(k) + ' ' + str(j) + ' ' + str(i) )
+
+                for j in range(self.inst.L, self.inst.M):
+                    self.model.addConstr(self.w[k, i] / self.p[k, i] <=self.w[k, j] / self.p[k, j] + (1 - self.x[k, j]) * self.c[k],
+                                         name='t < p ' + str(k) + ' ' + str(j) + ' ' + str(i))
+
+        self.model.setObjective(t.sum(), gb.GRB.MAXIMIZE)
+
+        if verbose:
+            print('Constraints time', time.time() - tt)
+
+        self.model.setParam('DualReductions', 0)
+        self.model.optimize()
+        self.time = time.time() - tt
+
+        if self.model.Status == GRB.INFEASIBLE:
+            self.model.computeIIS()
+            for c in self.model.getConstrs():
+                if c.IISConstr: print(f'\t{c.constrname}: {self.model.getRow(c)} {c.Sense} {c.RHS}')
+        if self.model.Status == GRB.UNBOUNDED:
+            print('unbounded')
+        self.obj = self.model.objVal
+
+        self.final_gap = self.model.MIPGap
+        return self.model.objVal,  w.x
+
+
