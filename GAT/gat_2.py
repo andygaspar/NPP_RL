@@ -1,39 +1,56 @@
+import os
+
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from torch_geometric.data import Batch
 from torch_geometric.nn import GATv2Conv, global_add_pool
 import numpy as np
 
 
-class ImprovedEGAT(torch.nn.Module):
+def create_batch(instances, device=torch.device('cpu')):
+    """Create a batch of heterographs"""
+
+    hetero_data_list = [inst.data for inst in instances]
+    batch = Batch.from_data_list(hetero_data_list)
+    if device.type == 'cuda':
+        batch.to(device)
+
+    return batch
+
+
+
+class EGAT2(torch.nn.Module):
     def __init__(self, node_channels, edge_channels, hidden_channels=128, out_channels=2,
                  heads=4, dropout=0.3, lr=0.001, wd=1e-5, device=torch.device('cpu')):
         super().__init__()
 
         self.node_channels = node_channels
         self.edge_channels = edge_channels
-        self.hidden_channels = hidden_channels
-        self.heads = heads
-        self.dropout = dropout
+        self.hidden_init = hidden_channels
+        self.output_init = out_channels
+        self.heads_init = heads
+        self.dropout_init = dropout
         self.device = device
 
         # ENHANCEMENT 1: Add skip connections to prevent over-smoothing
         self.skip1 = nn.Linear(node_channels, hidden_channels * heads)
-        self.skip2 = nn.Linear(hidden_channels * heads, hidden_channels * heads)
+        self.skip2 = nn.Linear(hidden_channels * heads, hidden_channels * (heads // 2))
 
         # ENHANCEMENT 2: Layer normalization instead of batch norm (better for graphs)
         self.norm1 = nn.LayerNorm(hidden_channels * heads)
-        self.norm2 = nn.LayerNorm(hidden_channels * heads)
+        self.norm2 = nn.LayerNorm(hidden_channels * (heads // 2))
 
-        # ENHANCEMENT 3: Add edge feature projection
-        self.edge_proj = nn.Linear(edge_channels, hidden_channels)
+        # ENHANCEMENT 3: Add edge feature projection - PROJECT TO SAME DIM AS edge_channels
+        # GATv2Conv expects edge_dim to match what was passed in initialization
+        self.edge_proj = nn.Linear(edge_channels, edge_channels)  # Keep same dimension
 
-        # ENHANCEMENT 4: Use fewer heads in later layers (prevent attention collapse)
+        # ENHANCEMENT 4: Use fewer heads_init in later layers (prevent attention collapse)
         self.conv1 = GATv2Conv(
             in_channels=node_channels,
             out_channels=hidden_channels,
             heads=heads,
-            edge_dim=edge_channels,
+            edge_dim=edge_channels,  # This MUST match the actual edge_attr dimension
             dropout=dropout,
             concat=True,
             add_self_loops=True  # Helps isolated nodes
@@ -43,18 +60,18 @@ class ImprovedEGAT(torch.nn.Module):
         self.conv2 = GATv2Conv(
             in_channels=hidden_channels * heads,
             out_channels=hidden_channels,
-            heads=heads // 2,  # Reduce heads
-            edge_dim=edge_channels,
+            heads=heads // 2,  # Reduce heads_init
+            edge_dim=edge_channels,  # Same edge dimension
             dropout=dropout,
             concat=True
         )
 
-        # ENHANCEMENT 6: Separate heads for mu and sigma
+        # ENHANCEMENT 6: Separate heads_init for mu and sigma
         self.mu_head = GATv2Conv(
             in_channels=hidden_channels * (heads // 2),
             out_channels=1,
             heads=1,
-            edge_dim=edge_channels,
+            edge_dim=edge_channels,  # Same edge dimension
             dropout=dropout,
             concat=False
         )
@@ -63,17 +80,15 @@ class ImprovedEGAT(torch.nn.Module):
             in_channels=hidden_channels * (heads // 2),
             out_channels=1,
             heads=1,
-            edge_dim=edge_channels,
+            edge_dim=edge_channels,  # Same edge dimension
             dropout=dropout,
             concat=False
         )
 
         # ENHANCEMENT 7: Add node type embedding (if you have path nodes vs other nodes)
-        self.node_type_embed = nn.Embedding(2, 16)  # Assuming binary node type
-
-        # ENHANCEMENT 8: Add global context (graph-level features)
-        self.global_pool = global_add_pool
-        self.global_proj = nn.Linear(hidden_channels * (heads // 2), 32)
+        # But we need to update node_channels accordingly
+        self.has_node_type = False  # We'll check this in forward
+        self.node_type_embed = nn.Embedding(2, 8)  # Smaller embedding
 
         # ENHANCEMENT 9: Output scaling parameters (learnable)
         self.mu_scale = nn.Parameter(torch.tensor(1.0))
@@ -87,34 +102,37 @@ class ImprovedEGAT(torch.nn.Module):
     def forward(self, batch, n_samples=1, return_attention=False):
         x, edge_index, edge_attr = batch.x, batch.edge_index, batch.edge_attr
 
-        # Add node type information if available
-        if x.shape[1] > self.node_channels:
-            # Assume last column is node type indicator
-            node_types = x[:, -1].long()
-            type_embed = self.node_type_embed(node_types)
-            x = torch.cat([x[:, :self.node_channels], type_embed], dim=1)
-            node_channels_actual = self.node_channels + 16
-        else:
-            node_channels_actual = self.node_channels
 
-        # Project edge features
-        edge_attr_proj = F.elu(self.edge_proj(edge_attr))
+
+        self.has_node_type = False
+        x_combined = x[:, :self.node_channels]
+
+
+        edge_attr_proj = self.edge_proj(edge_attr)  # Simple projection
 
         # First GATv2 layer with skip connection
-        x1 = self.conv1(x[:, :node_channels_actual], edge_index, edge_attr=edge_attr_proj)
-        x1_skip = self.skip1(x[:, :self.node_channels])
+        x1 = self.conv1(x_combined, edge_index, edge_attr=edge_attr_proj)
+
+        # Skip connection from original node features (not including type embedding)
+
+        skip_input = x_combined
+
+        x1_skip = self.skip1(skip_input)
         x1 = x1 + x1_skip  # Skip connection
         x1 = F.elu(self.norm1(x1))
-        x1 = F.dropout(x1, p=self.dropout, training=self.training)
+        x1 = F.dropout(x1, p=self.dropout_init, training=self.training)
 
         # Second GATv2 layer
         x2 = self.conv2(x1, edge_index, edge_attr=edge_attr_proj)
         x2_skip = self.skip2(x1)
+        # Ensure shapes match
+        if x2_skip.shape[1] != x2.shape[1]:
+            x2_skip = F.pad(x2_skip, (0, x2.shape[1] - x2_skip.shape[1]))
         x2 = x2 + x2_skip  # Skip connection
         x2 = F.elu(self.norm2(x2))
-        x2 = F.dropout(x2, p=self.dropout, training=self.training)
+        x2 = F.dropout(x2, p=self.dropout_init, training=self.training)
 
-        # Separate heads for mu and sigma
+        # Separate heads_init for mu and sigma
         mu_raw = self.mu_head(x2, edge_index, edge_attr=edge_attr_proj).squeeze(-1)
         sigma_raw = self.sigma_head(x2, edge_index, edge_attr=edge_attr_proj).squeeze(-1)
 
@@ -125,21 +143,20 @@ class ImprovedEGAT(torch.nn.Module):
         sigma = 0.01 + 0.49 * torch.sigmoid(sigma_raw)  # sigma in [0.01, 0.5]
 
         # Sampling
-        if n_samples > 0:
-            eps = torch.randn((n_samples, len(mu)), device=mu.device)
-            samples = mu.unsqueeze(0) + sigma.unsqueeze(0) * eps
-            samples = torch.clamp(samples, 0, 1)
+        eps = torch.randn((n_samples, len(mu)), device=mu.device)
+        samples = mu.unsqueeze(0) + sigma.unsqueeze(0) * eps
+        samples = torch.clamp(samples, 0, 1)
 
-            # Calculate log probabilities
-            mu_expanded = mu.unsqueeze(0).expand(n_samples, -1)
-            sigma_expanded = sigma.unsqueeze(0).expand(n_samples, -1)
-            log_probs = self.truncated_normal_log_prob(
-                samples, mu_expanded, sigma_expanded, low=0, high=1
-            )
+        # Calculate log probabilities
+        mu_expanded = mu.unsqueeze(0).expand(n_samples, -1)
+        sigma_expanded = sigma.unsqueeze(0).expand(n_samples, -1)
+        log_probs = self.truncated_normal_log_prob(
+            samples, mu_expanded, sigma_expanded, low=0, high=1
+        )
 
-            return samples, log_probs, mu, sigma
 
-        return mu, sigma
+
+        return samples, log_probs, mu
 
     @staticmethod
     def truncated_normal_log_prob(x, mu, sigma, low=0, high=1):
@@ -156,15 +173,108 @@ class ImprovedEGAT(torch.nn.Module):
 
         return log_prob
 
+    def get_distribution(self, instance, n_samples):
+        batch = create_batch([instance])
+        if self.device.type == 'cuda':
+            batch = batch.to(self.device)
+        with torch.no_grad():
+            sample, _, _ = self.forward(batch, n_samples)
+            mask = batch.x[:, -1] == 1  # get only paths (i.e. x[:, -1 == 1) of the batch
+            return sample[:, mask]
 
-class EGATWithFeatures(ImprovedEGAT):
+    def get_mean(self, instance):
+        batch = create_batch([instance])
+        if self.device.type == 'cuda':
+            batch = batch.to(self.device)
+        with torch.no_grad():
+            _, _, mu = self.forward(batch, 1)
+            mask = batch.x[:, -1] == 1  # get only paths (i.e. x[:, -1 == 1) of the batch
+            return mu[mask]
+
+    def train_policy(self, log_action, reward, baseline):
+
+        if reward.max() > 0:
+            advantage = reward - baseline
+
+            # Normalize advantage for stability
+            if advantage.std() > 0:
+                advantage = (advantage - advantage.mean()) / (advantage.std() + 1e-8)
+        else:
+            advantage = reward / (-reward.min())
+
+        loss = -(advantage * log_action).mean()
+
+        self.optimizer.zero_grad()
+        loss.backward()
+        torch.nn.utils.clip_grad_norm_(self.parameters(), max_norm=1.0)
+        self.optimizer.step()
+
+        return loss.item()
+
+    def save(self, path):
+
+        os.makedirs(os.path.dirname(os.path.abspath(path)), exist_ok=True)
+
+        save_dict = {
+            'model_state_dict': self.state_dict(),
+            'optimizer_state_dict': self.optimizer.state_dict(),
+            'model_config': {
+                'hidden_init': self.conv1.out_channels * self.conv1.heads,
+                'out_channels': 2,
+                'lr': self.optimizer.param_groups[0]['lr'],
+                'wd': self.optimizer.param_groups[0]['weight_decay'],
+                'heads_init': self.conv1.heads,
+                'dropout_init': self.dropout_init
+            },
+            'init_params': {'node_channels': self.node_channels, 'edge_channels': self.edge_channels,
+                            'hidden_init': self.hidden_init, 'output_init': self.output_init,
+                            'heads_init': self.heads_init, 'dropout_init': self.dropout_init,
+                            'best_gap': self.best_gap
+                            },
+        }
+
+        torch.save(save_dict, path)
+
+    def load(self, path, device=None):
+        if device is None:
+            device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+
+        net = torch.load(path, map_location=device, weights_only=False)
+        self.device = device
+
+        # Carica i pesi del modello
+        self.load_state_dict(net['model_state_dict'])
+
+        # Carica lo stato dell'ottimizzatore
+        self.optimizer.load_state_dict(net['optimizer_state_dict'])
+        self.to(device)
+
+        print(f"Modello caricato da: {path}")
+        print(f"Modello spostato su: {device}")
+
+        return net
+
+def load_agent(path, device=None) -> EGAT2:
+    if device is None:
+        device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+
+    init_params = torch.load(path, map_location=device, weights_only=False)['init_params']
+    agent = EGAT2(node_channels=init_params['node_channels'], edge_channels=init_params['edge_channels'],
+                 hidden_init=init_params['hidden_init'], out_channels=init_params['output_init'],
+                 heads=init_params['heads_init'], dropout=init_params['dropout_init'])
+    agent.best_gap = init_params['best_gap']
+    agent.load(path, device=device)
+    return agent
+
+
+class EGATWithFeatures(EGAT2):
     """
     Enhanced version with additional node features to differentiate nodes
     """
 
-    def __init__(self, node_channels, edge_channels, hidden_channels=128, out_channels=2,
+    def __init__(self, node_channels, edge_channels, hidden_init=128, out_channels=2,
                  heads=4, dropout=0.3, lr=0.001, wd=1e-5, device=torch.device('cpu')):
-        super().__init__(node_channels, edge_channels, hidden_channels, out_channels,
+        super().__init__(node_channels, edge_channels, hidden_init, out_channels,
                          heads, dropout, lr, wd, device)
 
         # Additional structural features
