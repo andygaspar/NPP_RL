@@ -14,9 +14,32 @@ class SKWP_instance:
         self.c = self.w.sum(axis=1)//4
         self.p = self.w + 10
 
-        self.max_w = self.w[:, :self.L] .max(axis=0)
+        # self.max_w =  self.w[:, :self.L] .max(axis=0)
+        self.max_w = self.compute_max()
+        self.max_e_inv = 10000 * np.ones(self.K) #/(self.p[:, self.L:] / self.w[:, self.L:]).max(axis=1)
+        pass
+
+    def compute_max(self):
+        p = self.p[:, self.L:]
+        w = self.w[:, self.L:]
+        efficiency = p / w
+        indexes = np.argsort(-efficiency, axis=-1)
+        efficiency_sorted = np.take_along_axis(efficiency, indexes, axis=-1)
+        w_sorted = np.take_along_axis(w, indexes, axis=-1)
+        cs = np.cumsum(w_sorted, axis=-1)
+        sol = (cs < self.c[:, np.newaxis])
+
+        max_w = np.zeros(self.L)
 
 
+        for i in range(self.L):
+            max_w[i] = (self.p[:, i].min() / efficiency_sorted[0, :]).max()
+            for k in range(self.K):
+                for j in range(1, sol.shape[1]):
+                    if self.p[k, i] / efficiency_sorted[k, j] + cs[k, j - 1] <= self.c[k]:
+                        max_w[i] = self.p[k, i] / efficiency_sorted[k, j]
+
+        return max_w
 
     def sort_values(self):
         for k in range(self.K):

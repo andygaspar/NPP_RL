@@ -241,7 +241,7 @@ class SKWP_greedy:
         if verbose:
             print('Constraints time', time.time() - tt)
 
-        self.model.setParam('DualReductions', 0)
+        # self.model.setParam('DualReductions', 0)
         self.model.optimize()
 
 
