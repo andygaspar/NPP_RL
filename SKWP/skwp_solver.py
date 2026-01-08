@@ -183,42 +183,58 @@ class SKWP_greedy:
         self.time = None
         self.final_gap = None
 
-        self.x = self.model.addMVar((self.inst.K, self.inst.M), vtype=GRB.BINARY)
+        self.x = self.model.addMVar((self.inst.K, self.inst.M), vtype=GRB.BINARY, name='x')
 
 
-    def solve(self, verbose=False):
+    def solve(self, verbose=False, init_solution=None, x_solution=None):
         if not verbose:
             self.model.setParam('OutputFlag', 0)
         tt = time.time()
 
-        w = self.model.addMVar(self.inst.L)
-        t = self.model.addMVar((self.inst.K, self.inst.L))
+        w = self.model.addMVar(self.inst.L, name='w')
+        z = self.model.addMVar((self.inst.K, self.inst.M, self.inst.M), vtype=GRB.BINARY, name='z')
+        if init_solution is not None:
+            self.model.addConstr(w == init_solution, name='init_solution')
+            self.model.addConstr(self.x == x_solution, name='x_init_solution')
+            pass
+        t = self.model.addMVar((self.inst.K, self.inst.L), name='t')
+        self.model.addConstr(z == 1 - self.x)
         for k in range(self.inst.K):
 
-            self.model.addConstr(t[k].sum() + (self.w[k, :self.inst.L] * self.x[k, :self.inst.L]).sum()
+            self.model.addConstr(t[k].sum() + (self.w[k, self.inst.L:] * self.x[k, self.inst.L:]).sum()
                                  <= self.c[k], name='cap' + str(k))
 
+            # self.model.addConstr(z[k, 0, 1] == 0)
+            for i in range(self.inst.M):
+                for j in range(self.inst.M):
+                    self.model.addConstr(z[k, i, j] >= self.x[k, i] - self.x[k, j], name='z1' + str(k) + ' ' + str(i) + ' ' + str(j))
+                    self.model.addConstr(z[k, i, j] <= 1 - self.x[k, j], name='z2' + str(k) + ' ' + str(i) + ' ' + str(j))
+
             for i in range(self.inst.L):
-                self.model.addConstr(t[k, i] <= self.x[k, i] * self.c[k], name='t < x ' + str(k) + ' ' + str(i))
-                self.model.addConstr(w[i] - t[k, i] <= (1 - self.x[k, i]) * self.c[k], name='p - t >  ' + str(k) + ' ' + str(i))
-                self.model.addConstr(t[k, i] <= w[i], name='t < p ' + str(k) + ' ' + str(i))
+                self.model.addConstr(t[k, i] <= self.x[k, i] * self.inst.max_w[i], name='t < x ' + str(k) + ' ' + str(i))
+                self.model.addConstr(w[i] - t[k, i] <= (1 - self.x[k, i]) * self.inst.max_w[i], name='w - t >  ' + str(k) + ' ' + str(i))
+                self.model.addConstr(t[k, i] <= w[i], name='t > w ' + str(k) + ' ' + str(i))
 
                 for j in range(self.inst.L):
-                    self.model.addConstr(t[k, i] / self.p[k, i] <= t[k, j] / self.p[k, j] + (1 - self.x[k, j]) * self.c[k],
-                                         name='t < p ' + str(k) + ' ' + str(j) + ' ' + str(i) )
+                    self.model.addConstr(t[k, i] / self.p[k, i] <=
+                                         w[j] / self.p[k, j] + (1 - z[k, i, j]) * self.inst.max_e_inv[k],
+                                         name='eff t < t ' + str(k) + ' ' + str(i) + ' ' + str(j))
 
                 for j in range(self.inst.L, self.inst.M):
-                    self.model.addConstr(t[k, i] / self.p[k, i] <= self.w[k, j] / self.p[k, j] + (1 - self.x[k, j]) * self.c[k],
-                                         name='t < p ' + str(k) + ' ' + str(j) + ' ' + str(i) )
+                    self.model.addConstr(t[k, i] / self.p[k, i] <=
+                                         self.w[k, j] / self.p[k, j] + (1 - z[k, i, j]) * self.inst.max_e_inv[k],
+                                         name='eff t < x ' + str(k) + ' ' + str(i) + ' ' + str(j))
 
             for i in range(self.inst.L, self.inst.M):
                 for j in range(self.inst.L):
-                    self.model.addConstr(self.w[k, i] / self.p[k, i] <= t[k, j] / self.p[k, j] + (1 - self.x[k, j]) * self.c[k],
-                                         name='t < p ' + str(k) + ' ' + str(j) + ' ' + str(i) )
+                    self.model.addConstr(self.w[k, i] * self.x[k, i] / self.p[k, i]
+                                         <= w[j] / self.p[k, j] + (1 - z[k, i, j]) * self.inst.max_e_inv[k],
+                                         name='eff x < t ' + str(k) + ' ' + str(i) + ' ' + str(j))
 
                 for j in range(self.inst.L, self.inst.M):
-                    self.model.addConstr(self.w[k, i] / self.p[k, i] <=self.w[k, j] / self.p[k, j] + (1 - self.x[k, j]) * self.c[k],
-                                         name='t < p ' + str(k) + ' ' + str(j) + ' ' + str(i))
+                    self.model.addConstr(self.w[k, i] * self.x[k, i] / self.p[k, i]
+                                         <= self.w[k, j] / self.p[k, j] + (1 - z[k, i, j]) * self.inst.max_e_inv[k],
+                                         name='eff x < x  ' + str(k) + ' ' + str(i) + ' ' + str(j))
 
         self.model.setObjective(t.sum(), gb.GRB.MAXIMIZE)
 
@@ -227,6 +243,9 @@ class SKWP_greedy:
 
         self.model.setParam('DualReductions', 0)
         self.model.optimize()
+
+
+
         self.time = time.time() - tt
 
         if self.model.Status == GRB.INFEASIBLE:

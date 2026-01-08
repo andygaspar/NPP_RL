@@ -25,7 +25,7 @@ class GA_SKWP:
 
     def run(self, iterations, init_population=None, verbose=False):
         if init_population is None:
-            self.population = np.random.uniform(0, self.instance.max_w, size=(self.pop_size + self.off_size, self.instance.L))
+            self.population = np.random.uniform(1e-6, self.instance.max_w, size=(self.pop_size + self.off_size, self.instance.L))
         else:
             self.population = np.zeros((self.pop_size + self.off_size, self.instance.L))
         self.time = time.time()
@@ -56,7 +56,7 @@ class GA_SKWP:
                 mutation_values = self.population[indices[self.pop_size + i]] + delta
                 self.population[indices[self.pop_size + i]][mutation_mask] = mutation_values[mutation_mask]
                 self.population[indices[self.pop_size + i]] = (
-                    np.clip(self.population[indices[self.pop_size + i]], 0, self.instance.max_w))  # Keep within bounds
+                    np.clip(self.population[indices[self.pop_size + i]], 1e-6, self.instance.max_w))  # Keep within bounds
 
             self.fitness[indices[self.pop_size:]], _ = self.solver_fun(self.population[indices[self.pop_size:]])
             indices = np.argsort(self.fitness)[::-1]

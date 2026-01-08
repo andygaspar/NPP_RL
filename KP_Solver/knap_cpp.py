@@ -108,3 +108,15 @@ class KnapCpp:
         # #
         # print(time.time() - t, 'torch')
         return vals, vals.max()
+
+    def get_solution_x(self, w_sol):
+        p = self.p.copy()
+        w = self.w.copy()
+        w[:, :, :self.L] = w_sol
+        efficiency = p / w
+        indexes = np.argsort(-efficiency, axis=-1)
+        w_sorted = np.take_along_axis(w, indexes, axis=-1)
+        cs = np.cumsum(w_sorted, axis=-1)
+        sol = (cs < self.c[:, np.newaxis])
+        np.put_along_axis(sol, indexes, sol, axis=-1)
+        return sol
