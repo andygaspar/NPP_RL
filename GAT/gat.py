@@ -100,6 +100,8 @@ class EGAT(torch.nn.Module):
 
         mu = 0.5 + 0.5 * torch.tanh(mu_raw)
         sigma = 0.005 + torch.sigmoid(sigma_raw) * 0.03
+        # mu = torch.sigmoid(mu_raw)  # Full [0,1] range, learnable center
+        # sigma = 0.01 + torch.sigmoid(sigma_raw) * 0.49  # σ ∈ [0.01, 0.5] for exploration
 
         eps = torch.randn((n_samples, len(mu)), device=mu.device)
         sample = mu + sigma * eps
@@ -134,16 +136,17 @@ class EGAT(torch.nn.Module):
 
     def train_policy(self, log_action, reward, baseline):
 
-        if reward.max() > 0:
-            advantage = reward - baseline
 
-            # Normalize advantage for stability
-            if advantage.std() > 0:
-                advantage = (advantage - advantage.mean()) / (advantage.std() + 1e-8)
-        else:
-            advantage = reward / (-reward.min())
+        advantage = reward - baseline
+
+        # Normalize advantage for stability
+        if advantage.std() > 0:
+            advantage = (advantage - advantage.mean()) / (advantage.std() + 1e-8)
+
 
         loss = -(advantage * log_action).mean()
+        entropy = -(torch.exp(log_action) * log_action).mean()
+        loss = loss - 0.01 * entropy
 
         self.optimizer.zero_grad()
         loss.backward()

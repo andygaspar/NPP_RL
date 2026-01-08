@@ -16,7 +16,7 @@ class SKWP_instance:
 
         # self.max_w =  self.w[:, :self.L] .max(axis=0)
         self.max_w = self.compute_max()
-        self.max_e_inv = 10000 * np.ones(self.K) #/(self.p[:, self.L:] / self.w[:, self.L:]).max(axis=1)
+        self.max_e_inv = (self.p[:, self.L:] / self.w[:, self.L:]).max(axis=1)
         pass
 
     def compute_max(self):
@@ -30,7 +30,6 @@ class SKWP_instance:
         sol = (cs < self.c[:, np.newaxis])
 
         max_w = np.zeros(self.L)
-
 
         for i in range(self.L):
             max_w[i] = (self.p[:, i].min() / efficiency_sorted[0, :]).max()
@@ -54,5 +53,5 @@ class SKWP_instance:
         return 'M:' + str(self.M) + '-K:' + str(self.K)
 
 
-
+9833.537793017009
 
