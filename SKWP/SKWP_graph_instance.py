@@ -70,12 +70,13 @@ class SKWPGraph(SKWP_instance):
         )
 
         norm_vals = data.x.max(dim=0)[0]
-        for i in range(data.x.shape[1]):
-            data.x[:, i] /= norm_vals[i]
+        cap_max = self.c.max()
+        for i in range(3):
+            data.x[:, i] /= cap_max
 
         edge_norm_vals = data.edge_attr.max(dim=0)[0]
-        for i in range(data.edge_attr.shape[1]):
-            data.edge_attr[:, i] /= edge_norm_vals[i]
+        for i in range(2):
+            data.edge_attr[:, i] /= cap_max
 
         return data
 
