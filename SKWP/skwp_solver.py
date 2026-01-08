@@ -198,7 +198,7 @@ class SKWP_greedy:
             self.model.addConstr(self.x == x_solution, name='x_init_solution')
             pass
         t = self.model.addMVar((self.inst.K, self.inst.L), name='t')
-        self.model.addConstr(z == 1 - self.x)
+        # self.model.addConstr(z == 1 - self.x)
         for k in range(self.inst.K):
 
             self.model.addConstr(t[k].sum() + (self.w[k, self.inst.L:] * self.x[k, self.inst.L:]).sum()

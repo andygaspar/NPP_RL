@@ -17,7 +17,7 @@ print('Experiments running on', device)
 
 METHOD = 'g'
 
-MIN_SIZE, MAX_SIZE = 10, 30
+MIN_SIZE, MAX_SIZE = 20, 60
 
 SAVE = True
 file_name = 'SKWP/NET/test_skwp_' + str(MIN_SIZE) + '_' + str(MAX_SIZE) + '___.pth'
