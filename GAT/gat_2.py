@@ -1,27 +1,38 @@
 import os
 
 import torch
-import torch.nn as nn
 import torch.nn.functional as F
-from torch_geometric.data import Batch
-from torch_geometric.nn import GATv2Conv, global_add_pool
-import numpy as np
+from torch import nn
+from torch_geometric.nn import GATv2Conv
+
+from NPP.Instance.gat_instance import create_batch
 
 
-def create_batch(instances, device=torch.device('cpu')):
-    """Create a batch of heterographs"""
+def truncated_normal_log_prob(x, mu, sigma, low=0, high=1):
+    """
+    Calculate log probability for truncated normal distribution.
+    x, mu, sigma: tensors of same shape
+    Returns: log_prob of same shape as x
+    """
+    # Standard normal log prob
+    normal = torch.distributions.Normal(mu, sigma)
+    log_prob = normal.log_prob(x)
 
-    hetero_data_list = [inst.data for inst in instances]
-    batch = Batch.from_data_list(hetero_data_list)
-    if device.type == 'cuda':
-        batch.to(device)
+    # Correction for truncation
+    Z = normal.cdf(torch.tensor(high)) - normal.cdf(torch.tensor(low))  # Normalization constant
+    log_Z = torch.log(Z + 1e-10)
 
-    return batch
+    # Apply truncation (0 probability outside [low, high])
+    mask = (x >= low) & (x <= high)
+    log_prob = torch.where(mask, log_prob - log_Z, torch.tensor(-float('inf')))
+
+    return log_prob
 
 
+# Node Classification Model using EGAT
 class EGAT2(torch.nn.Module):
-    def __init__(self, node_channels, edge_channels, hidden_channels=128, out_channels=2,
-                 heads=4, dropout=0.3, lr=0.001, wd=1e-5, device=torch.device('cpu')):
+    def __init__(self, node_channels, edge_channels, hidden_channels=64, out_channels=2, lr=0.001, wd=0.0001, heads=3,
+                 dropout=0.5, device=torch.device('cpu')):
         super().__init__()
 
         self.node_channels = node_channels
@@ -32,139 +43,88 @@ class EGAT2(torch.nn.Module):
         self.dropout_init = dropout
         self.device = device
 
-        # Initialize best_gap
-        self.best_gap = None
+        self.edge_layer = torch.nn.Sequential(
+            nn.Linear(edge_channels, hidden_channels),
+            nn.ReLU(),
+            nn.Linear(hidden_channels, edge_channels),
+            nn.ReLU()
+        )
 
-        # ENHANCEMENT 1: Add skip connections to prevent over-smoothing
-        self.skip1 = nn.Linear(node_channels, hidden_channels * heads)
-        self.skip2 = nn.Linear(hidden_channels * heads, hidden_channels * (heads // 2))
+        self.best_gap = 0
 
-        # ENHANCEMENT 2: Layer normalization instead of batch norm (better for graphs)
-        self.norm1 = nn.LayerNorm(hidden_channels * heads)
-        self.norm2 = nn.LayerNorm(hidden_channels * (heads // 2))
-
-        # ENHANCEMENT 3: Add edge feature projection - PROJECT TO SAME DIM AS edge_channels
-        self.edge_proj = nn.Linear(edge_channels, edge_channels)  # Keep same dimension
-
-        # ENHANCEMENT 4: Use fewer heads_init in later layers (prevent attention collapse)
+        # EGAT layers
         self.conv1 = GATv2Conv(
             in_channels=node_channels,
             out_channels=hidden_channels,
             heads=heads,
             edge_dim=edge_channels,
             dropout=dropout,
-            concat=True,
-            add_self_loops=True
-        )
-
-        # ENHANCEMENT 5: Add residual connection
-        self.conv2 = GATv2Conv(
-            in_channels=hidden_channels * heads,
-            out_channels=hidden_channels,
-            heads=heads // 2,  # Reduce heads
-            edge_dim=edge_channels,
-            dropout=dropout,
+            add_self_loops=True,
             concat=True
         )
 
-        # ENHANCEMENT 6: Separate heads for mu and sigma
-        self.conv_mu = GATv2Conv(
-            in_channels=hidden_channels * (heads // 2),
-            out_channels=1,
-            heads=1,
+        self.conv2 = GATv2Conv(
+            in_channels=hidden_channels * heads,
+            out_channels=hidden_channels,
+            heads=heads,
             edge_dim=edge_channels,
             dropout=dropout,
-            concat=False
+            add_self_loops=True,
+            concat=True
         )
 
-        self.conv_sigma = GATv2Conv(
-            in_channels=hidden_channels * (heads // 2),
-            out_channels=1,
-            heads=1,
+        self.conv3 = GATv2Conv(
+            in_channels=hidden_channels * heads,
+            out_channels=out_channels,
+            heads=1,  # Single head for output
             edge_dim=edge_channels,
             dropout=dropout,
-            concat=False
+            add_self_loops=True,
+            concat=False  # Don't concat for final layer
         )
 
-        # ENHANCEMENT 7: Add node type embedding
-        self.has_node_type = False
-        self.node_type_embed = nn.Embedding(2, 8)
-
-        # ENHANCEMENT 9: Output scaling parameters (learnable)
-        self.mu_scale = nn.Parameter(torch.tensor(1.0))
-        self.mu_bias = nn.Parameter(torch.tensor(0.0))
-
-        self.optimizer = torch.optim.AdamW(self.parameters(), lr=lr, weight_decay=wd)
+        self.optimizer = torch.optim.Adam(self.parameters(), lr=lr, weight_decay=wd)
+        self.dropout = dropout
 
         if self.device.type == 'cuda':
             self.to(self.device)
 
-    def forward(self, batch, n_samples=1, return_attention=False):
+    def forward(self, batch, n_samples):
         x, edge_index, edge_attr = batch.x, batch.edge_index, batch.edge_attr
 
-        self.has_node_type = False
-        x_combined = x[:, :self.node_channels]
+        edge_attr = self.edge_layer(edge_attr)
 
-        edge_attr_proj = self.edge_proj(edge_attr)
+        x = self.conv1(x, edge_index, edge_attr)
+        x = F.elu(x)
+        x = F.dropout(x, p=self.dropout, training=self.training)
 
-        # First GATv2 layer with skip connection
-        x1 = self.conv1(x_combined, edge_index, edge_attr=edge_attr_proj)
+        x = self.conv2(x, edge_index, edge_attr)
+        x = F.elu(x)
+        x = F.dropout(x, p=self.dropout, training=self.training)
 
-        # Skip connection from original node features
-        skip_input = x_combined
-        x1_skip = self.skip1(skip_input)
-        x1 = x1 + x1_skip
-        x1 = F.elu(self.norm1(x1))
-        x1 = F.dropout(x1, p=self.dropout_init, training=self.training)
+        x = self.conv3(x, edge_index, edge_attr)
 
-        # Second GATv2 layer
-        x2 = self.conv2(x1, edge_index, edge_attr=edge_attr_proj)
-        x2_skip = self.skip2(x1)
-        # Ensure shapes match
-        if x2_skip.shape[1] != x2.shape[1]:
-            x2_skip = F.pad(x2_skip, (0, x2.shape[1] - x2_skip.shape[1]))
-        x2 = x2 + x2_skip
-        x2 = F.elu(self.norm2(x2))
-        x2 = F.dropout(x2, p=self.dropout_init, training=self.training)
+        # Split and transform
+        mu_raw = x[:, 0]
+        sigma_raw = x[:, 1]
 
-        # Separate heads for mu and sigma
-        mu_raw = self.conv_mu(x2, edge_index, edge_attr=edge_attr_proj).squeeze(-1)
-        sigma_raw = self.conv_sigma(x2, edge_index, edge_attr=edge_attr_proj).squeeze(-1)
+        mu = 0.5 + 0.5 * torch.tanh(mu_raw)
+        sigma = 0.005 + torch.sigmoid(sigma_raw) * 0.3
+        # mu = torch.sigmoid(mu_raw)  # Full [0,1] range, learnable center
+        # sigma = 0.01 + torch.sigmoid(sigma_raw) * 0.49  # σ ∈ [0.01, 0.5] for exploration
 
-        # Apply different activations with learnable scaling
-        mu = 0.5 + 0.5 * torch.tanh(self.mu_scale * mu_raw + self.mu_bias)
-
-        # Ensure sigma has sufficient range
-        sigma = 0.01 + 0.49 * torch.sigmoid(sigma_raw)
-
-        # Sampling
         eps = torch.randn((n_samples, len(mu)), device=mu.device)
-        samples = mu.unsqueeze(0) + sigma.unsqueeze(0) * eps
-        samples = torch.clamp(samples, 0, 1)
+        sample = mu + sigma * eps
+        sample = torch.clamp(sample, 0, 1)  # Truncate to [0, 1]
 
-        # Calculate log probabilities
+        # Calculate log probabilities - MANUALLY with broadcasting
+        # Expand mu and sigma to match sample shape
         mu_expanded = mu.unsqueeze(0).expand(n_samples, -1)
         sigma_expanded = sigma.unsqueeze(0).expand(n_samples, -1)
-        log_probs = self.truncated_normal_log_prob(
-            samples, mu_expanded, sigma_expanded, low=0, high=1
-        )
 
-        return samples, log_probs, mu
+        log_action = truncated_normal_log_prob(sample, mu_expanded, sigma_expanded, low=0, high=1)
 
-    @staticmethod
-    def truncated_normal_log_prob(x, mu, sigma, low=0, high=1):
-        """Vectorized truncated normal log probability"""
-        dist = torch.distributions.Normal(mu, sigma)
-        log_prob = dist.log_prob(x)
-
-        # Truncation correction
-        Z = dist.cdf(torch.tensor(high, device=x.device)) - dist.cdf(torch.tensor(low, device=x.device))
-        log_Z = torch.log(Z + 1e-10)
-
-        mask = (x >= low) & (x <= high)
-        log_prob = torch.where(mask, log_prob - log_Z, torch.tensor(-1e10, device=x.device))
-
-        return log_prob
+        return sample, log_action, mu
 
     def get_distribution(self, instance, n_samples):
         batch = create_batch([instance])
@@ -172,7 +132,7 @@ class EGAT2(torch.nn.Module):
             batch = batch.to(self.device)
         with torch.no_grad():
             sample, _, _ = self.forward(batch, n_samples)
-            mask = batch.x[:, -1] == 1
+            mask = batch.x[:, -1] == 1  # get only paths (i.e. x[:, -1 == 1) of the batch
             return sample[:, mask]
 
     def get_mean(self, instance):
@@ -181,18 +141,22 @@ class EGAT2(torch.nn.Module):
             batch = batch.to(self.device)
         with torch.no_grad():
             _, _, mu = self.forward(batch, 1)
-            mask = batch.x[:, -1] == 1
+            mask = batch.x[:, -1] == 1  # get only paths (i.e. x[:, -1 == 1) of the batch
             return mu[mask]
 
     def train_policy(self, log_action, reward, baseline):
-        if reward.max() > 0:
-            advantage = reward - baseline
-            if advantage.std() > 0:
-                advantage = (advantage - advantage.mean()) / (advantage.std() + 1e-8)
-        else:
-            advantage = reward / (-reward.min())
+
+
+        advantage = reward - baseline
+
+        # Normalize advantage for stability
+        if advantage.std() > 0:
+            advantage = (advantage - advantage.mean()) / (advantage.std() + 1e-8)
+
 
         loss = -(advantage * log_action).mean()
+        # entropy = -(torch.exp(log_action) * log_action).mean()
+        # loss = loss - 0.01 * entropy
 
         self.optimizer.zero_grad()
         loss.backward()
@@ -202,296 +166,57 @@ class EGAT2(torch.nn.Module):
         return loss.item()
 
     def save(self, path):
-        """Save model with all necessary parameters"""
+
         os.makedirs(os.path.dirname(os.path.abspath(path)), exist_ok=True)
 
         save_dict = {
             'model_state_dict': self.state_dict(),
             'optimizer_state_dict': self.optimizer.state_dict(),
             'model_config': {
-                # Get actual dimensions from the model layers
                 'hidden_channels': self.conv1.out_channels * self.conv1.heads,
-                'out_channels': self.conv_mu.out_channels,  # Changed from conv3 to conv_mu
+                'out_channels': self.conv3.out_channels,
                 'lr': self.optimizer.param_groups[0]['lr'],
                 'wd': self.optimizer.param_groups[0]['weight_decay'],
                 'heads': self.conv1.heads,
-                'dropout': self.dropout_init
+                'dropout': self.dropout
             },
-            'init_params': {
-                'node_channels': self.node_channels,
-                'edge_channels': self.edge_channels,
-                'hidden_init': self.hidden_init,
-                'output_init': self.output_init,
-                'heads_init': self.heads_init,
-                'dropout_init': self.dropout_init,
-                'best_gap': self.best_gap
-            },
+            'init_params': {'node_channels': self.node_channels, 'edge_channels': self.edge_channels,
+                            'hidden_init': self.hidden_init, 'output_init': self.output_init,
+                            'heads_init': self.heads_init, 'dropout_init': self.dropout_init,
+                            'best_gap': self.best_gap
+                            },
         }
 
         torch.save(save_dict, path)
 
     def load(self, path, device=None):
-        """Load model from checkpoint"""
         if device is None:
             device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
-        # Load checkpoint
-        checkpoint = torch.load(path, map_location=device, weights_only=False)
-
-        # Update device
+        net = torch.load(path, map_location=device, weights_only=False)
         self.device = device
 
-        # Load model state dict
-        self.load_state_dict(checkpoint['model_state_dict'])
+        # Carica i pesi del modello
+        self.load_state_dict(net['model_state_dict'])
 
-        # Load optimizer state dict
-        if 'optimizer_state_dict' in checkpoint:
-            self.optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
-
-        # Load best_gap if available
-        if 'init_params' in checkpoint and 'best_gap' in checkpoint['init_params']:
-            self.best_gap = checkpoint['init_params']['best_gap']
-
-        # Move model to device
+        # Carica lo stato dell'ottimizzatore
+        self.optimizer.load_state_dict(net['optimizer_state_dict'])
         self.to(device)
 
-        print(f"Model loaded from: {path}")
-        print(f"Model moved to: {device}")
+        print(f"Modello caricato da: {path}")
+        print(f"Modello spostato su: {device}")
 
-        return checkpoint
+        return net
 
 
-def load_agent_2(path, device=None) -> EGAT2:
-    """Create and load an agent from checkpoint"""
+def load_agent(path, device=None) -> EGAT2:
     if device is None:
         device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
-    # Load checkpoint
-    checkpoint = torch.load(path, map_location=device, weights_only=False)
-
-    # Extract initialization parameters
-    init_params = checkpoint['init_params']
-
-    # Create agent with initialization parameters
-    agent = EGAT2(
-        node_channels=init_params['node_channels'],
-        edge_channels=init_params['edge_channels'],
-        hidden_channels=init_params['hidden_init'],  # Note: using hidden_init
-        out_channels=init_params['output_init'],  # Note: using output_init
-        heads=init_params['heads_init'],  # Note: using heads_init
-        dropout=init_params['dropout_init'],  # Note: using dropout_init
-        device=device
-    )
-
-    # Copy best_gap if available
-    if 'best_gap' in init_params:
-        agent.best_gap = init_params['best_gap']
-
-    # Load the model weights
-    agent.load_state_dict(checkpoint['model_state_dict'])
-
-    # Load optimizer state if available
-    if 'optimizer_state_dict' in checkpoint:
-        agent.optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
-
-    # Move to device
-    agent.to(device)
-
-    print(f"Agent loaded from: {path}")
-
+    init_params = torch.load(path, map_location=device, weights_only=False)['init_params']
+    agent = EGAT2(node_channels=init_params['node_channels'], edge_channels=init_params['edge_channels'],
+                 hidden_channels=init_params['hidden_init'], out_channels=init_params['output_init'],
+                 heads=init_params['heads_init'], dropout=init_params['dropout_init'])
+    agent.best_gap = init_params['best_gap']
+    agent.load(path, device=device)
     return agent
-
-
-class EGATWithFeatures(EGAT2):
-    """
-    Enhanced version with additional node features to differentiate nodes
-    """
-
-    def __init__(self, node_channels, edge_channels, hidden_init=128, out_channels=2,
-                 heads=4, dropout=0.3, lr=0.001, wd=1e-5, device=torch.device('cpu')):
-        super().__init__(node_channels, edge_channels, hidden_init, out_channels,
-                         heads, dropout, lr, wd, device)
-
-        # Additional structural features
-        self.degree_encoder = nn.Linear(1, 16)
-        self.positional_encoder = PositionalEncoder(dim=16)
-
-    def forward(self, batch, n_samples=1):
-        x, edge_index, edge_attr = batch.x, batch.edge_index, batch.edge_attr
-
-        # Compute node degrees as additional feature
-        if hasattr(batch, 'degree') and batch.degree is not None:
-            degree_feat = batch.degree.float().unsqueeze(-1)
-        else:
-            # Compute degree from edge_index
-            degree = torch.zeros(x.shape[0], device=x.device)
-            unique, counts = torch.unique(edge_index[0], return_counts=True)
-            degree[unique] = counts.float()
-            degree_feat = degree.unsqueeze(-1)
-
-        degree_encoded = F.elu(self.degree_encoder(degree_feat))
-
-        # Add positional encoding (helps differentiate nodes)
-        pos_encoded = self.positional_encoder(x.shape[0]).to(x.device)
-
-        # Combine all features
-        x_augmented = torch.cat([
-            x[:, :self.node_channels],
-            degree_encoded,
-            pos_encoded
-        ], dim=-1)
-
-        # Update batch with augmented features
-        batch.x = x_augmented
-
-        return super().forward(batch, n_samples)
-
-
-class PositionalEncoder(nn.Module):
-    """Sinusoidal positional encoding"""
-
-    def __init__(self, dim, max_len=1000):
-        super().__init__()
-        position = torch.arange(max_len).unsqueeze(1)
-        div_term = torch.exp(torch.arange(0, dim, 2) * (-np.log(10000.0) / dim))
-        pe = torch.zeros(max_len, dim)
-        pe[:, 0::2] = torch.sin(position * div_term)
-        pe[:, 1::2] = torch.cos(position * div_term)
-        self.register_buffer('pe', pe)
-
-    def forward(self, n_nodes):
-        return self.pe[:n_nodes]
-
-
-# ------------------------------------------------------------
-# TRAINING IMPROVEMENTS
-# ------------------------------------------------------------
-
-def train_with_improvements(model, train_loader, val_loader, n_epochs=100):
-    """
-    Improved training procedure
-    """
-    model.train()
-
-    for epoch in range(n_epochs):
-        total_loss = 0
-        all_mus = []
-        all_sigmas = []
-
-        for batch_idx, batch in enumerate(train_loader):
-            if model.device.type == 'cuda':
-                batch = batch.to(model.device)
-
-            n_samples = 4  # Multiple samples for better gradient estimates
-
-            # Forward pass
-            samples, log_probs, mu, sigma = model(batch, n_samples)
-
-            # Collect statistics
-            all_mus.append(mu.detach())
-            all_sigmas.append(sigma.detach())
-
-            # ENHANCEMENT: Add entropy regularization to encourage exploration
-            entropy = -log_probs.mean()
-
-            # Compute reward (this depends on your task)
-            reward = compute_reward(samples, batch)  # Implement your reward function
-
-            # ENHANCEMENT: Use baseline with variance reduction
-            if batch_idx == 0:
-                baseline = reward.mean()
-            else:
-                baseline = 0.95 * baseline + 0.05 * reward.mean()
-
-            advantage = reward - baseline
-
-            # ENHANCEMENT: Normalize advantage per batch
-            if advantage.std() > 0:
-                advantage = (advantage - advantage.mean()) / (advantage.std() + 1e-8)
-
-            # ENHANCEMENT: Clip advantages
-            advantage = torch.clamp(advantage, -5, 5)
-
-            # Policy loss
-            policy_loss = -(advantage * log_probs).mean()
-
-            # ENHANCEMENT: Add entropy bonus (encourages exploration)
-            entropy_coeff = max(0.1, 1.0 - epoch / n_epochs * 0.8)  # Anneal entropy
-            loss = policy_loss - entropy_coeff * entropy
-
-            # ENHANCEMENT: Add regularization to prevent sigma collapse
-            sigma_penalty = -torch.log(sigma + 1e-8).mean() * 0.01
-            loss += sigma_penalty
-
-            # Optimize
-            model.optimizer.zero_grad()
-            loss.backward()
-
-            # ENHANCEMENT: Gradient clipping
-            torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
-
-            model.optimizer.step()
-
-            total_loss += loss.item()
-
-        # Log statistics
-        all_mus = torch.cat(all_mus)
-        all_sigmas = torch.cat(all_sigmas)
-
-        print(f"Epoch {epoch + 1}:")
-        print(f"  Loss: {total_loss / len(train_loader):.4f}")
-        print(f"  Mu stats - Mean: {all_mus.mean():.4f}, Std: {all_mus.std():.4f}")
-        print(f"    Min: {all_mus.min():.4f}, Max: {all_mus.max():.4f}")
-        print(f"  Sigma stats - Mean: {all_sigmas.mean():.4f}")
-
-        # Validate
-        if val_loader is not None:
-            validate_model(model, val_loader)
-
-
-def compute_reward(samples, batch):
-    """
-    Implement your task-specific reward function here
-    """
-    # Example: Reward based on some target (modify for your task)
-    target = torch.rand_like(samples)  # Replace with actual target
-    reward = -torch.abs(samples - target).mean(dim=-1)
-    return reward
-
-
-def validate_model(model, val_loader):
-    model.eval()
-    with torch.no_grad():
-        all_mus = []
-        for batch in val_loader:
-            if model.device.type == 'cuda':
-                batch = batch.to(model.device)
-            mu, _ = model(batch, n_samples=0)
-            all_mus.append(mu)
-
-        all_mus = torch.cat(all_mus)
-        print(f"  Validation - Mu diversity: {all_mus.std():.4f}")
-        print(f"    Range: [{all_mus.min():.4f}, {all_mus.max():.4f}]")
-    model.train()
-
-
-def diagnose_model(model, data_loader):
-    """Check if model outputs are collapsing"""
-    model.eval()
-    with torch.no_grad():
-        for batch in data_loader:
-            mu, sigma = model(batch, n_samples=0)
-            print(f"Mu statistics:")
-            print(f"  Mean: {mu.mean():.4f}")
-            print(f"  Std: {mu.std():.4f}")
-            print(f"  Min: {mu.min():.4f}, Max: {mu.max():.4f}")
-            print(f"  Unique values: {torch.unique(mu.round(decimals=3)).shape[0]}")
-            print(f"Sigma statistics:")
-            print(f"  Mean: {sigma.mean():.4f}")
-
-            # Check attention weights
-            if hasattr(model.conv1, '_attention'):
-                attn = model.conv1._attention
-                print(f"Attention diversity: {attn.std():.4f}")
-
-            break

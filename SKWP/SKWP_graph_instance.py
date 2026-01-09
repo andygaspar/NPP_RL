@@ -48,7 +48,13 @@ class SKWPGraph(SKWP_instance):
 
                 # Edge feature: [weight, item_type]
                 item_type = 0 if i < self.L else 1
-                edge_feature = [self.w[k, i] * item_type, self.p[k, i], item_type, 1 - item_type]
+                edge_feature = [self.w[k, i] * item_type, self.p[k, i], 0, item_type, 1 - item_type]
+                edge_features.append(edge_feature)
+
+        for i in range(self.M):
+            for j in range(i + 1, self.M):
+                edge_indices.append([i, j])
+                edge_feature = [0, 0, 1, 0, 0]
                 edge_features.append(edge_feature)
 
         edge_index = torch.tensor(edge_indices, dtype=torch.long).t().contiguous()
