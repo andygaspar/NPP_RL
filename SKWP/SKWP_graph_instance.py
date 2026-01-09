@@ -7,8 +7,9 @@ from SKWP.skwp_instance import SKWP_instance
 
 
 class SKWPGraph(SKWP_instance):
-    def __init__(self, M, K):
+    def __init__(self, M, K, extended=True):
         super().__init__(M, K)
+        self.extended = extended
         self.data = self.to_graph()
 
     def to_graph(self):
@@ -48,14 +49,18 @@ class SKWPGraph(SKWP_instance):
 
                 # Edge feature: [weight, item_type]
                 item_type = 0 if i < self.L else 1
-                edge_feature = [self.w[k, i] * item_type, self.p[k, i], 0, item_type, 1 - item_type]
+                if self.extended:
+                    edge_feature = [self.w[k, i] * item_type, self.p[k, i], 0, item_type, 1 - item_type]
+                else:
+                    edge_feature = [self.w[k, i] * item_type, self.p[k, i], item_type, 1 - item_type]
                 edge_features.append(edge_feature)
 
-        for i in range(self.M):
-            for j in range(i + 1, self.M):
-                edge_indices.append([i, j])
-                edge_feature = [0, 0, 1, 0, 0]
-                edge_features.append(edge_feature)
+        if self.extended:
+            for i in range(self.M):
+                for j in range(i + 1, self.M):
+                    edge_indices.append([i, j])
+                    edge_feature = [0, 0, 1, 0, 0]
+                    edge_features.append(edge_feature)
 
         edge_index = torch.tensor(edge_indices, dtype=torch.long).t().contiguous()
         edge_attr = torch.tensor(edge_features, dtype=torch.float)
