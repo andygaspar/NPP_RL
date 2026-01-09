@@ -37,28 +37,6 @@ class GA_SKWP:
         # Sort indices by fitness (descending)
         indices = np.argsort(self.fitness)[::-1]
         for gen in range(iterations):
-        #     # Evaluate fitness (sum of genes as simple fitness)
-        #
-        #
-        #     # Generate children for remaining half
-        #     for i in range(self.off_size):
-        #         # Select two random parents from best individuals
-        #         parent_indices = np.random.choice(indices[:self.pop_size], 2, replace=False)
-        #         parent1 = self.population[parent_indices[0]]
-        #         parent2 = self.population[parent_indices[1]]
-        #
-        #         # Single-point crossover (50% from each parent)
-        #         crossover = np.array([True if np.random.uniform() < 0.5 else False for _ in range(self.population.shape[1])])
-        #         self.population[indices[self.pop_size + i]] = parent1 * crossover + parent2 * (1 - crossover)
-        #
-        #         # Add small mutation (5% chance per gene)
-        #         mutation_mask = np.random.random(self.population.shape[1]) < 0.02
-        #         delta = np.random.uniform(-percentage, percentage, size=self.population.shape[1])
-        #         mutation_values = self.population[indices[self.pop_size + i]] + delta
-        #         self.population[indices[self.pop_size + i]][mutation_mask] = mutation_values[mutation_mask]
-        #         self.population[indices[self.pop_size + i]] = (
-        #             np.clip(self.population[indices[self.pop_size + i]], 1e-6, self.instance.max_w))
-
 
             parents_idxs = np.random.choice(indices[:self.pop_size], (self.off_size, 2))
             mask = np.random.random((self.off_size, self.instance.L)) > 0.5

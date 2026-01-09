@@ -17,7 +17,7 @@ print('Experiments running on', device)
 
 METHOD = 'g'
 
-MIN_SIZE, MAX_SIZE = 20, 90
+MIN_SIZE, MAX_SIZE = 20, 30
 
 SAVE = True
 file_name = 'SKWP/NET/test_skwp_' + str(MIN_SIZE) + '_' + str(MAX_SIZE) + '.pth'
@@ -28,31 +28,31 @@ SEED = 1
 
 HIDDEN = 64
 
-N_SAMPLES = 128
-ITERATIONS = 400
-EPISODE_PER_BATCH = 128
+N_SAMPLES = 2
+ITERATIONS = 500
+EPISODE_PER_BATCH = 256
 
 BASELINE_ITERATIONS = 100
 POPULATION = N_SAMPLES
 
 lr = 0.001
 wd = 0.0001
-agent = EGAT(6, 4, HIDDEN, 2, lr=lr, wd=wd, device=device)
+agent = EGAT(7, 6, HIDDEN, 2, lr=lr, wd=wd, device=device)
 
 BEST_GAP = 0
 t = time.time()
 
 
 for iteration in range(ITERATIONS):
+    # np.random.seed(SEED)
     instances = [SKWPGraph(np.random.choice(M), np.random.choice(K)) for _ in range(EPISODE_PER_BATCH)]
 
     batch = create_SKWP_batch(instances, device=device)
 
     samples, log_probs, _ = agent(batch, N_SAMPLES)
-
-    rewards, baselines, log_prices = [], [], []
+    rewards, baselines, log_prices, randoms = [], [], [], []
     wins, gaps = 0, []
-    rand_wins, rand_gaps = 0, []
+    rand_wins, rand_gaps, rand_ga_gaps = 0, [], []
 
     for i, inst in enumerate(instances):
         # if i % 5 == 0:
@@ -70,11 +70,13 @@ for iteration in range(ITERATIONS):
         rewards += np.repeat(vals, inst.L).tolist()
 
         random_best_val = inst.random_baseline(N_SAMPLES, method=METHOD)
+        randoms += [random_best_val for _ in range(inst.L * N_SAMPLES)]
 
         wins += g.best_val < agent_best_val
         gaps += [agent_best_val/g.best_val if g.best_val > 0 else 0]
         rand_wins += random_best_val < agent_best_val
         rand_gaps += [agent_best_val/random_best_val if random_best_val > 0 else 0]
+        rand_ga_gaps += [g.best_val/random_best_val if g.best_val > 0 else 0]
 
     if iteration > 5 and BEST_GAP < np.mean(gaps):
         agent.best_gap = np.mean(gaps)
@@ -85,6 +87,8 @@ for iteration in range(ITERATIONS):
 
     reward_tensor = torch.tensor(rewards, dtype=torch.float32, device=device)
     baseline_tensor = torch.tensor(baselines, dtype=torch.float32, device=device)
+    # baseline_tensor = torch.tensor(randoms, dtype=torch.float32, device=device)
+
     log_prices = torch.cat(log_prices)
 
     loss = agent.train_policy(log_prices, reward_tensor, baseline_tensor)
@@ -98,6 +102,7 @@ for iteration in range(ITERATIONS):
               f"loss: {loss :.3f}  ||  "
               f"rand WinRate: {rand_wins / EPISODE_PER_BATCH :.3f} | "
               f"rand avg gap: {np.mean(rand_gaps) :.3f} | "
+              f"rand avg ga rand gap: {np.mean(rand_ga_gaps) :.3f} | "
               )
 
 agent.save('SKK/NET/test.pth')

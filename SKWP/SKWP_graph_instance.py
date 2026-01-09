@@ -24,14 +24,20 @@ class SKWPGraph(SKWP_instance):
         for i in range(self.M):
             item_type = 1 if i < self.L else 0  # 1 for type A, 0 for type B
             # Feature: [value, *, one hot]
-            item_feature = [self.p[:, i].mean(), self.w[:, i].mean() * (1 - item_type), 0, 0, 1 - item_type, item_type]
+            if self.extended:
+                item_feature = [self.p[:, i].mean(), self.w[:, i].mean() * (1 - item_type), self.max_w[i] if i < self.L else 0, 0,  0, 1 - item_type, item_type]
+            else:
+                item_feature = [self.p[:, i].mean(), self.w[:, i].mean() * (1 - item_type), 0, 0, 1 - item_type, item_type]
             item_features.append(item_feature)
 
         # Create user node features
         user_features = []
         for k in range(self.K):
             # Feature: [capacity, 0 for padding, 1 for indicating user node]
-            user_feature = [0, 0, self.c[k], 1, 0, 0]
+            if self.extended:
+                user_feature = [0, 0, self.c[k], 0, 1, 0, 0]
+            else:
+                user_feature = [0, 0, self.c[k], 1, 0, 0]
             user_features.append(user_feature)
 
         # Concatenate all node features
@@ -50,7 +56,7 @@ class SKWPGraph(SKWP_instance):
                 # Edge feature: [weight, item_type]
                 item_type = 0 if i < self.L else 1
                 if self.extended:
-                    edge_feature = [self.w[k, i] * item_type, self.p[k, i], 0, item_type, 1 - item_type]
+                    edge_feature = [self.w[k, i] * item_type, self.p[k, i], self.p[k, i] * item_type /self.w[k, i], 0,  item_type, 1 - item_type]
                 else:
                     edge_feature = [self.w[k, i] * item_type, self.p[k, i], item_type, 1 - item_type]
                 edge_features.append(edge_feature)
@@ -59,7 +65,7 @@ class SKWPGraph(SKWP_instance):
             for i in range(self.M):
                 for j in range(i + 1, self.M):
                     edge_indices.append([i, j])
-                    edge_feature = [0, 0, 1, 0, 0]
+                    edge_feature = [0, 0, 0, 1, 0, 0]
                     edge_features.append(edge_feature)
 
         edge_index = torch.tensor(edge_indices, dtype=torch.long).t().contiguous()
@@ -86,8 +92,12 @@ class SKWPGraph(SKWP_instance):
             data.x[:, i] /= cap_max
 
         edge_norm_vals = data.edge_attr.max(dim=0)[0]
-        for i in range(2):
-            data.edge_attr[:, i] /= cap_max
+        if self.extended:
+
+            data.edge_attr[:, :4] /= cap_max
+
+        else:
+            data.edge_attr[:, :2] /= cap_max
 
         return data
 
