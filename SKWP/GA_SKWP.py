@@ -28,35 +28,25 @@ class GA_SKWP:
             self.population = np.random.uniform(1e-6, self.instance.max_w, size=(self.pop_size + self.off_size, self.instance.L))
         else:
             self.population = np.zeros((self.pop_size + self.off_size, self.instance.L))
+            self.population[:self.pop_size] = init_population
+
         self.time = time.time()
         self.fitness[:self.off_size], _ = self.solver_fun(self.population[:self.off_size])
         self.fitness[self.off_size: self.off_size * 2], _ = self.solver_fun(self.population[self.off_size: self.off_size * 2])
-
+        percentage = self.instance.max_w * 0.5
         # Sort indices by fitness (descending)
         indices = np.argsort(self.fitness)[::-1]
         for gen in range(iterations):
-            # Evaluate fitness (sum of genes as simple fitness)
 
+            parents_idxs = np.random.choice(indices[:self.pop_size], (self.off_size, 2))
+            mask = np.random.random((self.off_size, self.instance.L)) > 0.5
+            self.population[indices[self.pop_size:]] = (
+                    self.population[parents_idxs[:, 0]] * mask + self.population[parents_idxs[:, 1]] * (~mask))
 
-            # Generate children for remaining half
-            for i in range(self.off_size):
-                # Select two random parents from best individuals
-                parent_indices = np.random.choice(indices[:self.pop_size], 2, replace=False)
-                parent1 = self.population[parent_indices[0]]
-                parent2 = self.population[parent_indices[1]]
-
-                # Single-point crossover (50% from each parent)
-                crossover = np.array([True if np.random.uniform() < 0.5 else False for _ in range(self.population.shape[1])])
-                self.population[indices[self.pop_size + i]] = parent1 * crossover + parent2 * (1 - crossover)
-
-                # Add small mutation (5% chance per gene)
-                mutation_mask = np.random.random(self.population.shape[1]) < 0.02
-                percentage = self.instance.max_w * 0.5
-                delta = np.random.uniform(-percentage, percentage, size=self.population.shape[1])
-                mutation_values = self.population[indices[self.pop_size + i]] + delta
-                self.population[indices[self.pop_size + i]][mutation_mask] = mutation_values[mutation_mask]
-                self.population[indices[self.pop_size + i]] = (
-                    np.clip(self.population[indices[self.pop_size + i]], 1e-6, self.instance.max_w))  # Keep within bounds
+            mask = np.random.random((self.off_size, self.instance.L)) < 0.02
+            delta = np.random.uniform(-percentage, percentage, size=self.population.shape[1])
+            self.population[indices[self.pop_size:]] += delta * mask
+            self.population[indices[self.pop_size:]] = np.clip(self.population[indices[self.pop_size:]], 1e-6, self.instance.max_w)
 
             self.fitness[indices[self.pop_size:]], _ = self.solver_fun(self.population[indices[self.pop_size:]])
             indices = np.argsort(self.fitness)[::-1]

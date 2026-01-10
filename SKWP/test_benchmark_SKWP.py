@@ -7,7 +7,9 @@ from SKWP.GA_SKWP import GA_SKWP
 from GAT.gat import load_agent
 from SKWP.skwp_solver import SKWP
 
-file_name = 'SKWP/NET/test_skwp_10_30___.pth'
+EXTENDED = True
+
+file_name = 'SKWP/NET/test_skwp_20_50.pth'
 # df_exact = pd.read_csv('NPP/Results/exact_results.csv')
 
 agent = load_agent(file_name)
@@ -19,8 +21,9 @@ POPULATION = 128
 TIME_LIMIT = 1800
 METHOD = 'g'
 
-CASES = [(10, 10), (15, 15), (20, 20), (30, 30), (60, 60), (90, 90), (10, 90), (90, 10)]
-# CASES = [(60, 60), (90, 90), (10, 90), (90, 10)]
+CASES = [(10, 1), (15, 1), (20, 1), (30, 1), (60, 1), (90, 1), (10, 1), (90, 1)]
+# CASES = [ (90, 1), (10, 90), (90, 10)]
+# CASES = [(10, 90), (90, 10)]
 
 SOLVER_CASES = [(10, 10), (15, 15)]
 SOLVER_CASES = []
@@ -41,7 +44,7 @@ for case in CASES:
     wins, gaps, exact_gaps = 0, [], []
     for run in range(N_RUNS):
         np.random.seed(run)
-        instance = SKWPGraph(paths, comm)
+        instance = SKWPGraph(paths, comm, extended=EXTENDED)
 
         ga = GA_SKWP(instance, pop_size=POPULATION, method=METHOD)
         ga.run(BASELINE_ITERATIONS)

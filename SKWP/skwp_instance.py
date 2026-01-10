@@ -11,11 +11,13 @@ class SKWP_instance:
         self.L = self.M // 2
 
         self.w = np.random.uniform(1, 100, size=(self.K, self.M))
-        self.c = self.w.sum(axis=1)//4
-        self.p = self.w + 10
+        # self.c = self.w.sum(axis=1)//4
+        # self.p = self.w + 10
+        self.c = np.random.uniform(self.w.sum(axis=1)*0.1, self.w.sum(axis=1)*0.9)
+        self.p = np.random.uniform(1, 100, size=(self.K, self.M))
 
         # self.max_w =  self.w[:, :self.L] .max(axis=0)
-        self.max_w = self.compute_max()
+        self.max_w = self.compute_max() + 10
         self.max_e_inv = (self.p[:, self.L:] / self.w[:, self.L:]).max(axis=1)
         pass
 
