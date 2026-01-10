@@ -17,27 +17,27 @@ print('Experiments running on', device)
 
 METHOD = 'g'
 
-MIN_SIZE, MAX_SIZE = 20, 90
+MIN_SIZE, MAX_SIZE = 5, 10
 
 SAVE = True
 file_name = 'SKWP/NET/test_skwp_' + str(MIN_SIZE) + '_' + str(MAX_SIZE) + '.pth'
 
-M = range(MIN_SIZE, MAX_SIZE)
-K = range(MIN_SIZE, MAX_SIZE)
+M = range(MIN_SIZE, MAX_SIZE + 1)
+K = range(MIN_SIZE, MAX_SIZE + 1)
 SEED = 1
 
 HIDDEN = 64
 
-N_SAMPLES = 128
+N_SAMPLES = 64
 ITERATIONS = 400
-EPISODE_PER_BATCH = 128
+EPISODE_PER_BATCH = 64
 
 BASELINE_ITERATIONS = 100
 POPULATION = N_SAMPLES
 
-lr = 0.001
+lr = 0.0001
 wd = 0.0001
-agent = EGAT(6, 4, HIDDEN, 2, lr=lr, wd=wd, device=device)
+agent = EGAT2(6, 5, HIDDEN, 2, lr=lr, wd=wd, device=device)
 
 BEST_GAP = 0
 t = time.time()
@@ -50,7 +50,7 @@ for iteration in range(ITERATIONS):
 
     samples, log_probs, _ = agent(batch, N_SAMPLES)
 
-    rewards, baselines, log_prices = [], [], []
+    rewards, baselines, log_prices, randoms = [], [], [], []
     wins, gaps = 0, []
     rand_wins, rand_gaps = 0, []
 
@@ -70,6 +70,7 @@ for iteration in range(ITERATIONS):
         rewards += np.repeat(vals, inst.L).tolist()
 
         random_best_val = inst.random_baseline(N_SAMPLES, method=METHOD)
+        randoms += [random_best_val for _ in range(inst.L * N_SAMPLES)]
 
         wins += g.best_val < agent_best_val
         gaps += [agent_best_val/g.best_val if g.best_val > 0 else 0]
@@ -85,6 +86,7 @@ for iteration in range(ITERATIONS):
 
     reward_tensor = torch.tensor(rewards, dtype=torch.float32, device=device)
     baseline_tensor = torch.tensor(baselines, dtype=torch.float32, device=device)
+    # baseline_tensor = torch.tensor(randoms, dtype=torch.float32, device=device)
     log_prices = torch.cat(log_prices)
 
     loss = agent.train_policy(log_prices, reward_tensor, baseline_tensor)

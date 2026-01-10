@@ -109,7 +109,7 @@ class EGAT2(torch.nn.Module):
         sigma_raw = x[:, 1]
 
         mu = 0.5 + 0.5 * torch.tanh(mu_raw)
-        sigma = 0.005 + torch.sigmoid(sigma_raw) * 0.3
+        sigma = 0.005 + torch.sigmoid(sigma_raw) * 0.5
         # mu = torch.sigmoid(mu_raw)  # Full [0,1] range, learnable center
         # sigma = 0.01 + torch.sigmoid(sigma_raw) * 0.49  # σ ∈ [0.01, 0.5] for exploration
 
@@ -155,8 +155,8 @@ class EGAT2(torch.nn.Module):
 
 
         loss = -(advantage * log_action).mean()
-        # entropy = -(torch.exp(log_action) * log_action).mean()
-        # loss = loss - 0.01 * entropy
+        entropy = -(torch.exp(log_action) * log_action).mean()
+        loss = loss - 0.01 * entropy
 
         self.optimizer.zero_grad()
         loss.backward()
