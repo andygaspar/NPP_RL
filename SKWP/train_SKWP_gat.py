@@ -17,7 +17,7 @@ print('Experiments running on', device)
 
 METHOD = 'g'
 
-MIN_SIZE, MAX_SIZE = 20, 30
+MIN_SIZE, MAX_SIZE = 20, 50
 
 SAVE = True
 file_name = 'SKWP/NET/test_skwp_' + str(MIN_SIZE) + '_' + str(MAX_SIZE) + '.pth'
@@ -45,7 +45,7 @@ t = time.time()
 
 for iteration in range(ITERATIONS):
     # np.random.seed(SEED)
-    instances = [SKWPGraph(np.random.choice(M), np.random.choice(K)) for _ in range(EPISODE_PER_BATCH)]
+    instances = [SKWPGraph(np.random.choice(M), 1) for _ in range(EPISODE_PER_BATCH)]
 
     batch = create_SKWP_batch(instances, device=device)
 

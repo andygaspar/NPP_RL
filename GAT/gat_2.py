@@ -50,6 +50,13 @@ class EGAT2(torch.nn.Module):
             nn.ReLU()
         )
 
+        self.last_leyer = torch.nn.Sequential(
+            nn.Linear(hidden_channels, hidden_channels),
+            nn.ReLU(),
+            nn.Linear(hidden_channels, out_channels),
+            nn.ReLU()
+        )
+
         self.best_gap = 0
 
         # EGAT layers
@@ -92,7 +99,7 @@ class EGAT2(torch.nn.Module):
     def forward(self, batch, n_samples):
         x, edge_index, edge_attr = batch.x, batch.edge_index, batch.edge_attr
 
-        edge_attr = self.edge_layer(edge_attr)
+        # edge_attr = self.edge_layer(edge_attr)
 
         x = self.conv1(x, edge_index, edge_attr)
         x = F.elu(x)
@@ -104,12 +111,14 @@ class EGAT2(torch.nn.Module):
 
         x = self.conv3(x, edge_index, edge_attr)
 
+        # x = self.last_leyer(x)
+
         # Split and transform
         mu_raw = x[:, 0]
         sigma_raw = x[:, 1]
 
         mu = 0.5 + 0.5 * torch.tanh(mu_raw)
-        sigma = 0.005 + torch.sigmoid(sigma_raw) * 0.3
+        sigma = 0.005 + torch.sigmoid(sigma_raw) * 0.03
         # mu = torch.sigmoid(mu_raw)  # Full [0,1] range, learnable center
         # sigma = 0.01 + torch.sigmoid(sigma_raw) * 0.49  # σ ∈ [0.01, 0.5] for exploration
 
