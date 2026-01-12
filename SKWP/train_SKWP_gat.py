@@ -26,17 +26,19 @@ M = range(MIN_SIZE, MAX_SIZE)
 K = range(MIN_SIZE, MAX_SIZE)
 SEED = 1
 
-HIDDEN = 128
+HIDDEN = 64
 
 N_SAMPLES = 2
 ITERATIONS = 500
-EPISODE_PER_BATCH = 256
+EPISODE_PER_BATCH = 512
 
 BASELINE_ITERATIONS = 1000
 POPULATION = N_SAMPLES
 
-lr = 0.01
+lr = 0.001
 wd = 0.0001
+entropy_coef = 0.001
+max_norm=10.0
 agent = EGAT(7, 6, HIDDEN, 2, lr=lr, wd=wd, device=device)
 
 BEST_GAP = 0
@@ -91,7 +93,7 @@ for iteration in range(ITERATIONS):
 
     log_prices = torch.cat(log_prices)
 
-    loss = agent.train_policy(log_prices, reward_tensor, baseline_tensor)
+    loss = agent.train_policy(log_prices, reward_tensor, baseline_tensor, entropy_coef=entropy_coef, max_norm=max_norm)
 
     if iteration % 1 == 0:
         max_agent = reward_tensor.max().item()
