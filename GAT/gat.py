@@ -134,7 +134,7 @@ class EGAT(torch.nn.Module):
             mask = batch.x[:, -1] == 1  # get only paths (i.e. x[:, -1 == 1) of the batch
             return mu[mask]
 
-    def train_policy(self, log_action, reward, baseline):
+    def train_policy(self, log_action, reward, baseline, entropy_coef=0.01, max_norm=1.0):
 
 
         advantage = reward - baseline
@@ -146,11 +146,11 @@ class EGAT(torch.nn.Module):
 
         loss = -(advantage * log_action).mean()
         entropy = -(torch.exp(log_action) * log_action).mean()
-        loss = loss - 0.01 * entropy
+        loss = loss - entropy_coef * entropy
 
         self.optimizer.zero_grad()
         loss.backward()
-        torch.nn.utils.clip_grad_norm_(self.parameters(), max_norm=1.0)
+        torch.nn.utils.clip_grad_norm_(self.parameters(), max_norm=max_norm)
         self.optimizer.step()
 
         return loss.item()
