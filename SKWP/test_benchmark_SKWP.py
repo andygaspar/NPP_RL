@@ -9,20 +9,20 @@ from SKWP.skwp_solver import SKWP
 
 EXTENDED = True
 
-file_name = 'SKWP/NET/test_skwp_20_50.pth'
+file_name = 'SKWP/NET/test_skwp_10_40.pth'
 # df_exact = pd.read_csv('NPP/Results/exact_results.csv')
 
 agent = load_agent(file_name)
 device = agent.device
 
-BASELINE_ITERATIONS = 100
+BASELINE_ITERATIONS = 1000
 POPULATION = 128
 
 TIME_LIMIT = 1800
 METHOD = 'g'
 
-CASES = [(10, 1), (15, 1), (20, 1), (30, 1), (60, 1), (90, 1), (360, 1), (720, 1)]
-# CASES = [ (90, 1), (10, 90), (90, 10)]
+CASES = [(20, 20), (56, 56), (90, 90), (180, 180), (360, 360), (450, 450), (20, 450), (450, 20)]
+CASES += [(20, 1), (56, 1), (90, 1), (180, 1), (360, 1), (450, 1)]
 # CASES = [(10, 90), (90, 10)]
 
 SOLVER_CASES = [(10, 10), (15, 15)]
