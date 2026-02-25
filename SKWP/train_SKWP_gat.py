@@ -17,7 +17,7 @@ print('Experiments running on', device)
 
 METHOD = 'g'
 
-MIN_SIZE, MAX_SIZE = 10, 40
+MIN_SIZE, MAX_SIZE = 20, 50
 
 SAVE = True
 file_name = 'SKWP/NET/test_skwp_' + str(MIN_SIZE) + '_' + str(MAX_SIZE) + '.pth'
@@ -30,15 +30,16 @@ HIDDEN = 64
 
 N_SAMPLES = 2
 ITERATIONS = 500
-EPISODE_PER_BATCH = 256
+EPISODE_PER_BATCH = 512
 
 BASELINE_ITERATIONS = 1000
 POPULATION = N_SAMPLES
 
-lr = 0.01
+lr = 0.001
 wd = 0.0001
-STD_MAX = 0.03
-agent = EGAT(7, 6, HIDDEN, 2, std_max=STD_MAX, lr=lr, wd=wd, device=device)
+entropy_coef = 0.001
+max_norm=10.0
+agent = EGAT(7, 6, HIDDEN, 2, lr=lr, wd=wd, device=device)
 
 BEST_GAP = 0
 t = time.time()
@@ -73,9 +74,6 @@ for iteration in range(ITERATIONS):
         random_best_val = inst.random_baseline(N_SAMPLES, method=METHOD) + 1e-6
         randoms += [random_best_val for _ in range(inst.L * N_SAMPLES)]
 
-        if agent_best_val/g.best_val > 10:
-            print('hello')
-
         wins += g.best_val < agent_best_val
         gaps += [agent_best_val/g.best_val if g.best_val > 0 else 0]
         rand_wins += random_best_val < agent_best_val
@@ -95,7 +93,7 @@ for iteration in range(ITERATIONS):
 
     log_prices = torch.cat(log_prices)
 
-    loss = agent.train_policy(log_prices, reward_tensor, baseline_tensor)
+    loss = agent.train_policy(log_prices, reward_tensor, baseline_tensor, entropy_coef=entropy_coef, max_norm=max_norm)
 
     if iteration % 1 == 0:
         max_agent = reward_tensor.max().item()
