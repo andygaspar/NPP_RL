@@ -31,7 +31,7 @@ def truncated_normal_log_prob(x, mu, sigma, low=0, high=1):
 # Node Classification Model using EGAT
 class EGAT(torch.nn.Module):
     def __init__(self, node_channels, edge_channels, hidden_channels=64, out_channels=2, lr=0.001, wd=0.0001, heads=3,
-                 dropout=0.5, device=torch.device('cpu')):
+                 dropout=0.5, std_max=0.03, device=torch.device('cpu')):
         super().__init__()
 
         self.node_channels = node_channels
@@ -41,6 +41,7 @@ class EGAT(torch.nn.Module):
         self.heads_init = heads
         self.dropout_init = dropout
         self.device = device
+        self.std_max = std_max
 
         self.best_gap = 0
 
@@ -99,7 +100,7 @@ class EGAT(torch.nn.Module):
         sigma_raw = x[:, 1]
 
         mu = 0.5 + 0.5 * torch.tanh(mu_raw)
-        sigma = 0.005 + torch.sigmoid(sigma_raw) * 0.03
+        sigma = 0.005 + torch.sigmoid(sigma_raw) * self.std_max
         # mu = torch.sigmoid(mu_raw)  # Full [0,1] range, learnable center
         # sigma = 0.01 + torch.sigmoid(sigma_raw) * 0.49  # σ ∈ [0.01, 0.5] for exploration
 
@@ -141,12 +142,13 @@ class EGAT(torch.nn.Module):
 
         # Normalize advantage for stability
         if advantage.std() > 0:
-            advantage = (advantage - advantage.mean()) / (advantage.std() + 1e-8)
+            # advantage = (advantage - advantage.mean()) / (advantage.std() + 1e-8)
+            advantage /= advantage.abs().max()
 
 
         loss = -(advantage * log_action).mean()
-        entropy = -(torch.exp(log_action) * log_action).mean()
-        loss = loss - 0.01 * entropy
+        # entropy = -(torch.exp(log_action) * log_action).mean()
+        # loss = loss - 0.01 * entropy
 
         self.optimizer.zero_grad()
         loss.backward()

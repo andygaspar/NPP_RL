@@ -17,7 +17,7 @@ print('Experiments running on', device)
 
 METHOD = 'g'
 
-MIN_SIZE, MAX_SIZE = 20, 50
+MIN_SIZE, MAX_SIZE = 10, 40
 
 SAVE = True
 file_name = 'SKWP/NET/test_skwp_' + str(MIN_SIZE) + '_' + str(MAX_SIZE) + '.pth'
@@ -32,12 +32,13 @@ N_SAMPLES = 2
 ITERATIONS = 500
 EPISODE_PER_BATCH = 256
 
-BASELINE_ITERATIONS = 100
+BASELINE_ITERATIONS = 1000
 POPULATION = N_SAMPLES
 
-lr = 0.001
+lr = 0.01
 wd = 0.0001
-agent = EGAT(7, 6, HIDDEN, 2, lr=lr, wd=wd, device=device)
+STD_MAX = 0.03
+agent = EGAT(7, 6, HIDDEN, 2, std_max=STD_MAX, lr=lr, wd=wd, device=device)
 
 BEST_GAP = 0
 t = time.time()
@@ -45,7 +46,7 @@ t = time.time()
 
 for iteration in range(ITERATIONS):
     # np.random.seed(SEED)
-    instances = [SKWPGraph(np.random.choice(M), 1) for _ in range(EPISODE_PER_BATCH)]
+    instances = [SKWPGraph(np.random.choice(M), np.random.choice(K)) for _ in range(EPISODE_PER_BATCH)]
 
     batch = create_SKWP_batch(instances, device=device)
 
@@ -69,8 +70,11 @@ for iteration in range(ITERATIONS):
         vals, agent_best_val = inst.eval_sample(inst_sample_tensor, method=METHOD)
         rewards += np.repeat(vals, inst.L).tolist()
 
-        random_best_val = inst.random_baseline(N_SAMPLES, method=METHOD)
+        random_best_val = inst.random_baseline(N_SAMPLES, method=METHOD) + 1e-6
         randoms += [random_best_val for _ in range(inst.L * N_SAMPLES)]
+
+        if agent_best_val/g.best_val > 10:
+            print('hello')
 
         wins += g.best_val < agent_best_val
         gaps += [agent_best_val/g.best_val if g.best_val > 0 else 0]

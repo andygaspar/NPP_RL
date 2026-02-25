@@ -15,7 +15,7 @@ class GA_SKWP:
         self.off_size = pop_size // 2
         self.population = None
         self.fitness = np.ones(self.pop_size + self.off_size) * (-1e4)
-        self.solver = KnapCpp(self.instance, pop_size=self.off_size)
+        self.solver = KnapCpp(self.instance, batch_size=self.off_size)
         self.best_val = None
         self.best_solution = None
         self.avg_fitness = None

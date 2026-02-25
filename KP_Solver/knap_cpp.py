@@ -17,12 +17,12 @@ class Result(ctypes.Structure):
 
 
 class KnapCpp:
-    def __init__(self, pb, pop_size):
+    def __init__(self, pb, batch_size):
         self.lib = ctypes.CDLL('KP_Solver/knap_bridge.so')
-        self.pop_size = pop_size
-        self.p = np.ascontiguousarray(np.array([pb.p for _ in range(self.pop_size)], dtype=float))
-        self.c = np.ascontiguousarray(np.stack((pb.c,) * pop_size))
-        self.w = np.ascontiguousarray(np.array([pb.w for _ in range(self.pop_size)]))
+        self.batch_size = batch_size
+        self.p = np.ascontiguousarray(np.array([pb.p for _ in range(self.batch_size)], dtype=float))
+        self.c = np.ascontiguousarray(np.stack((pb.c,) * batch_size))
+        self.w = np.ascontiguousarray(np.array([pb.w for _ in range(self.batch_size)]))
         # p = np.ascontiguousarray(p, dtype=np.float64)
         # w = np.ascontiguousarray(w, dtype=np.float64)
         # c = np.ascontiguousarray(c, dtype=np.float64)
@@ -50,19 +50,19 @@ class KnapCpp:
         return self.lib.knapsack_(p.ctypes.data_as(ctypes.POINTER(ctypes.c_double)),
                                   w.ctypes.data_as(ctypes.POINTER(ctypes.c_double)),
                                   c.ctypes.data_as(ctypes.POINTER(ctypes.c_double)),
-                                  ctypes.c_int(self.M), ctypes.c_int(self.K), ctypes.c_int(self.pop_size),
+                                  ctypes.c_int(self.M), ctypes.c_int(self.K), ctypes.c_int(self.batch_size),
                                   ctypes.c_int(self.numProcs))
 
     def solve_skwp_greedy_cpp(self, w, L):
         # p = np.ascontiguousarray(p, dtype=np.float64)
         w = np.ascontiguousarray(w, dtype=np.float64)
         # c = np.ascontiguousarray(c, dtype=np.float64)
-        v = np.ascontiguousarray(np.zeros(self.pop_size), dtype=np.float64)
+        v = np.ascontiguousarray(np.zeros(self.batch_size), dtype=np.float64)
         self.lib.solve_greedy_(self.p.ctypes.data_as(ctypes.POINTER(ctypes.c_double)),
                                w.ctypes.data_as(ctypes.POINTER(ctypes.c_double)),
                                self.c.ctypes.data_as(ctypes.POINTER(ctypes.c_double)),
                               v.ctypes.data_as(ctypes.POINTER(ctypes.c_double)),
-                               ctypes.c_int(self.M), ctypes.c_int(self.K), ctypes.c_int(self.pop_size), ctypes.c_int(L),
+                               ctypes.c_int(self.M), ctypes.c_int(self.K), ctypes.c_int(self.batch_size), ctypes.c_int(L),
                                ctypes.c_int(self.numProcs))
         return v
 
@@ -72,7 +72,7 @@ class KnapCpp:
         p[:, :, :self.L] = p_new
 
         res = self.solve(p, self.w, self.c)
-        sol = np.ctypeslib.as_array(res.contents.solution, shape=(self.pop_size, self.K, self.M))
+        sol = np.ctypeslib.as_array(res.contents.solution, shape=(self.batch_size, self.K, self.M))
         vals = ((self.p - p) * sol)[:, :, :self.L].sum(axis=-1).sum(axis=-1)
         self.lib.free_result(res)
         return vals, vals.max()
@@ -83,7 +83,7 @@ class KnapCpp:
         w[:, :, :self.L] = w_new
 
         res = self.solve(self.p, w, self.c)
-        sol = np.ctypeslib.as_array(res.contents.solution, shape=(self.pop_size, self.K, self.M))
+        sol = np.ctypeslib.as_array(res.contents.solution, shape=(self.batch_size, self.K, self.M))
 
         vals = (w * sol)[:, :, :self.L].sum(axis=-1).sum(axis=-1)
         self.lib.free_result(res)
