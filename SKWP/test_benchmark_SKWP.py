@@ -21,12 +21,13 @@ POPULATION = 128
 TIME_LIMIT = 1800
 METHOD = 'g'
 
-CASES = [(20, 20), (56, 56), (90, 90), (180, 180), (360, 360), (450, 450), (20, 450), (450, 20)]
-CASES += [(20, 1), (56, 1), (90, 1), (180, 1), (360, 1), (450, 1)]
+CASES = [(10, 10), (15, 15), (20, 20), (56, 56), (90, 90), (180, 180), (360, 360), (450, 450), (20, 450), (450, 20)]
+SINGLE_COMMODITY = [(20, 1), (56, 1), (90, 1), (180, 1), (360, 1), (450, 1)]
+CASES = SINGLE_COMMODITY + CASES
 # CASES = [(10, 90), (90, 10)]
 
-SOLVER_CASES = [(10, 10), (15, 15)]
-SOLVER_CASES = []
+SOLVER_CASES = SINGLE_COMMODITY + [(10, 10), (15, 15)]
+
 case_num = dict(zip(CASES, range(len(CASES))))
 
 N_RUNS = 10
