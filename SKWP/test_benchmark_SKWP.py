@@ -23,6 +23,7 @@ METHOD = 'g'
 
 CASES = [(10, 10), (15, 15), (20, 20), (56, 56), (90, 90), (180, 180), (360, 360), (450, 450), (20, 450), (450, 20)]
 SINGLE_COMMODITY = [(20, 1), (56, 1), (90, 1), (180, 1), (360, 1), (450, 1)]
+SINGLE_COMMODITY = []
 CASES = SINGLE_COMMODITY + CASES
 # CASES = [(10, 90), (90, 10)]
 
@@ -66,7 +67,7 @@ for case in CASES:
 
         if case in SOLVER_CASES:
             solver = SKWP(instance)
-            obj, sol = solver.solve(verbose=False)
+            obj, sol = solver.solve(verbose=False, time_limit=TIME_LIMIT)
             solver_time, solver_obj, solver_final_gap, solver_status = (
                 solver.time, solver.obj, solver.final_gap, solver.model.status)
         else:
@@ -79,6 +80,6 @@ for case in CASES:
                                solver_time, ga_nn.time + net_time, net_time, ga.time, case_num[case]]
 
     print(paths, comm, wins / N_RUNS, np.mean(gaps), np.mean(exact_gaps))
-    df.to_csv('SKWP/Results/test_.csv')
+    # df.to_csv('SKWP/Results/test_.csv')
 
 
