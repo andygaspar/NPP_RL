@@ -9,7 +9,7 @@ from SKWP.skwp_solver import SKWP
 
 EXTENDED = True
 
-file_name = 'SKWP/NET/test_skwp_10_40.pth'
+file_name = 'SKWP/NET/' + 'test_skwp_k1_20_50_2026-03-26 08:03:29.pth'
 # df_exact = pd.read_csv('NPP/Results/exact_results.csv')
 
 agent = load_agent(file_name)
