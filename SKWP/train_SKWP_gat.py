@@ -1,4 +1,5 @@
 import time
+import datetime
 
 import numpy as np
 import torch
@@ -20,22 +21,24 @@ METHOD = 'g'
 MIN_SIZE, MAX_SIZE = 20, 50
 
 SAVE = True
-file_name = 'SKWP/NET/test_skwp_' + str(MIN_SIZE) + '_' + str(MAX_SIZE) + '.pth'
+timestamp = str(datetime.datetime.now()).split('.')[0] 
+file_name = 'SKWP/NET/test_skwp_k1_' + str(MIN_SIZE) + '_' + str(MAX_SIZE) + '_' + timestamp +'.pth'
+print(file_name)
 
 M = range(MIN_SIZE, MAX_SIZE)
 K = range(MIN_SIZE, MAX_SIZE)
 SEED = 1
 
-HIDDEN = 64
+HIDDEN = 128
 
 N_SAMPLES = 2
 ITERATIONS = 500
-EPISODE_PER_BATCH = 512
+EPISODE_PER_BATCH = 1024
 
 BASELINE_ITERATIONS = 1000
 POPULATION = N_SAMPLES
 
-lr = 0.001
+lr = 0.0001
 wd = 0.0001
 entropy_coef = 0.001
 max_norm=10.0
@@ -47,7 +50,7 @@ t = time.time()
 
 for iteration in range(ITERATIONS):
     # np.random.seed(SEED)
-    instances = [SKWPGraph(np.random.choice(M), np.random.choice(K)) for _ in range(EPISODE_PER_BATCH)]
+    instances = [SKWPGraph(np.random.choice(M), 1) for _ in range(EPISODE_PER_BATCH)]
 
     batch = create_SKWP_batch(instances, device=device)
 
