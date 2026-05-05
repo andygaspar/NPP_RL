@@ -278,7 +278,7 @@ agent = PPOAgent(net, lr=lr, gamma=0.99, clip_epsilon=0.2,
                  ppo_epochs=4, batch_size=32, wd=wd)
 
 # inst = Instance(n_paths=N_PATHS, n_commodities=N_COMM, seed=SEED)
-# solver = GlobalSolver(inst, time_limit=3600, verbose=True)
+# solver = NPPSolver(inst, time_limit=3600, verbose=True)
 # solver.solve()
 # optimal_value = solver.obj
 # print(f"Optimal solution: {optimal_value}")

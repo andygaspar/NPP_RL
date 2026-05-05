@@ -5,7 +5,7 @@ import pandas as pd
 from NPP.Instance.gat_instance import GATInstance
 from NPP.Solver.genetic_solver import Genetic
 from GAT.gat import load_agent
-from NPP.Solver.solver import GlobalSolver
+from NPP.Solver.solver import NPPSolver
 
 file_name = 'NPP/NET/test_15_25.pth'
 
@@ -56,7 +56,7 @@ for case in CASES:
         wins += ga.best_val <= ga_nn.best_val
         gaps += [ga_nn.best_val / ga.best_val] if ga.best_val > 0 else ([-1] if ga_nn.best_val > 0 else [-2])
 
-        solver = GlobalSolver(instance, time_limit=TIME_LIMIT, verbose=False)
+        solver = NPPSolver(instance, time_limit=TIME_LIMIT, verbose=False)
         # solver.solve()
         # exact_gaps += [ga_nn.best_val / solver.obj]
         # df.loc[df.shape[0]] = [run, comm, paths,

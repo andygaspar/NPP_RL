@@ -17,16 +17,16 @@ def stop(model, where):
             model.terminate()
 
 
-class GlobalSolver:
+class NPPSolver:
 
     def __init__(self, instance: Instance, time_limit=None, min_sol_num=None, verbose=False, binary=True, tol=1e-9):
 
+
         self.instance = instance
         self.m = Model('CVRP')
+        self.time_limit = time_limit
         if not verbose:
             self.m.setParam("OutputFlag", 0)
-        if time_limit is not None:
-            self.m.setParam('TimeLimit', time_limit)
         self.m._time_limit = time_limit
         self.m._min_sol_num = min_sol_num
         self.tol = tol
@@ -115,7 +115,9 @@ class GlobalSolver:
             print('ub', max_val)
             self.m.addConstr(quicksum(k.n_users * self.p[(p, k)]
                                          for p in self.instance.paths for k in self.instance.commodities) <= max_val)
-
+        constr_time = time.time() - self.time
+        if self.time_limit is not None:
+            self.m.setParam('TimeLimit', self.time_limit - constr_time)
         self.m.optimize()
         self.time = time.time() - self.time
         self.status = self.m.status

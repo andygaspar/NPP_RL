@@ -28,8 +28,10 @@ class SKWP:
     def solve(self, verbose=False, time_limit=None):
         if not verbose:
             self.model.setParam('OutputFlag', 0)
-        if time_limit is not None:
-            self.model.setParam('TimeLimit', time_limit)
+
+        if self.p.shape[0] >= 360 and self.p.shape[1] >= 360:
+            self.model.setParam('Threads', 4)
+            self.model.setParam('SoftMemLimit', 90)
 
         tt = time.time()
         w = self.model.addMVar(self.inst.L)
@@ -38,6 +40,18 @@ class SKWP:
         d = self.w / self.p
         x = self.model.addMVar((self.inst.K, self.inst.M), vtype=GRB.BINARY)
         W = self.c
+
+        # init sol
+
+        e_max = 1 / d
+        idx_e_max = np.argmax(e_max[:, self.inst.L:], axis=1) + self.inst.L
+        idx_p_min = np.argmin(self.p[:, :self.inst.L], axis=1)
+        w_max = self.w[range(self.inst.K), idx_e_max]
+        w_init = np.ones((self.inst.K, self.inst.L)) * 10 ** 5 + 1
+        w_init[range(self.inst.K), idx_p_min] = w_max / self.p[range(self.inst.K), idx_p_min]
+        w_init = w_init.min(axis=0)
+        w_init[w_init > 10 ** 5] = 0
+        w.Start = w_init
 
         self.model.addConstr(t.sum(axis=1) + (self.w[:, self.inst.L:] * x[:, self.inst.L:]).sum(axis=1) <= self.c, name='t ')
         self.model.addConstr(t >= w - (1 - x[:, :self.inst.L]) * W.max(), name='cap ')
@@ -57,7 +71,11 @@ class SKWP:
                 self.model.addConstr(d_L[:, i] - (1 - x[:, i]) * max_d <= d[:, j] + x[:, j] * max_d,
                                      name='d_Li < dj ' + str(i) + ' ' + str(j))
 
+        constr_time = time.time() - tt
         self.model.setObjective(t.sum(), gb.GRB.MAXIMIZE)
+        if time_limit is not None:
+            self.model.setParam('TimeLimit', time_limit - constr_time)
+
         self.model.optimize()
         self.time = time.time() - tt
 

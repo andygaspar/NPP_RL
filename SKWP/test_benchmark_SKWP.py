@@ -9,14 +9,48 @@ from SKWP.skwp_solver import SKWP
 
 EXTENDED = True
 model_name = 'test_skwp_20_50_2026-02-27 22:48:24'
+
+
+# ***************************************  DAAAAAAAAAAAAAAAAAAAAAAAAA CAMBIARE!! NEI TEST CON QUELLO SOPRA
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+model_name = 'test_skwp_20_50'
+
+
+
+
+
+
+
+
+
+
+
+
+# ***************************************
+
 file_name = 'SKWP/NET/' + model_name + '.pth'
 # df_exact = pd.read_csv('NPP/Results/exact_results.csv')
 
 agent = load_agent(file_name)
 device = agent.device
 
-BASELINE_ITERATIONS = 1000
-POPULATION = 128
+BASELINE_ITERATIONS = 10 # ************************ ANCHE QUA
+POPULATION = 8   # ************************ ANCHE QUA
 
 TIME_LIMIT = 1800
 METHOD = 'g'
