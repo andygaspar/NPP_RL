@@ -29,7 +29,7 @@ class SKWP:
         if not verbose:
             self.model.setParam('OutputFlag', 0)
 
-        if self.p.shape[0] >= 360 and self.p.shape[1] >= 360:
+        if self.inst.K >= 360 and self.inst.M >= 360:
             self.model.setParam('Threads', 4)
             self.model.setParam('SoftMemLimit', 90)
 
