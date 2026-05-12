@@ -135,7 +135,7 @@ class EGAT(torch.nn.Module):
             mask = batch.x[:, -1] == 1  # get only paths (i.e. x[:, -1 == 1) of the batch
             return mu[mask]
 
-    def train_policy(self, log_action, reward, baseline):
+    def train_policy(self, log_action, reward, baseline, entropy_coef=0.01, max_norm=1.0):
 
 
         advantage = reward - baseline
@@ -145,15 +145,13 @@ class EGAT(torch.nn.Module):
             advantage = (advantage - advantage.mean()) / (advantage.std() + 1e-8)
 
 
-        # loss = -(advantage * log_action).mean() + (reward/baseline).mean()
-        loss = -(reward/baseline- 1).mean() * log_action
-
-        # entropy = -(torch.exp(log_action) * log_action).mean()
-        # loss = loss - 0.01 * entropy
+        loss = -(advantage * log_action).mean()
+        entropy = -(torch.exp(log_action) * log_action).mean()
+        loss = loss - entropy_coef * entropy
 
         self.optimizer.zero_grad()
         loss.backward()
-        torch.nn.utils.clip_grad_norm_(self.parameters(), max_norm=1.0)
+        torch.nn.utils.clip_grad_norm_(self.parameters(), max_norm=max_norm)
         self.optimizer.step()
 
         return loss.item()
@@ -176,7 +174,7 @@ class EGAT(torch.nn.Module):
             'init_params': {'node_channels': self.node_channels, 'edge_channels': self.edge_channels,
                             'hidden_init': self.hidden_init, 'output_init': self.output_init,
                             'heads_init': self.heads_init, 'dropout_init': self.dropout_init,
-                            'best_gap': self.best_gap, 'std_max': self.std_max
+                            'best_gap': self.best_gap
                             },
         }
 
@@ -207,14 +205,9 @@ def load_agent(path, device=None) -> EGAT:
         device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
     init_params = torch.load(path, map_location=device, weights_only=False)['init_params']
-    if 'std_max' in init_params.keys():
-        agent = EGAT(node_channels=init_params['node_channels'], edge_channels=init_params['edge_channels'],
-                     hidden_channels=init_params['hidden_init'], out_channels=init_params['output_init'],
-                     heads=init_params['heads_init'], dropout=init_params['dropout_init'], std_max=init_params['std_max'])
-    else:
-        agent = EGAT(node_channels=init_params['node_channels'], edge_channels=init_params['edge_channels'],
-                     hidden_channels=init_params['hidden_init'], out_channels=init_params['output_init'],
-                     heads=init_params['heads_init'], dropout=init_params['dropout_init'])
+    agent = EGAT(node_channels=init_params['node_channels'], edge_channels=init_params['edge_channels'],
+                 hidden_channels=init_params['hidden_init'], out_channels=init_params['output_init'],
+                 heads=init_params['heads_init'], dropout=init_params['dropout_init'])
     agent.best_gap = init_params['best_gap']
     agent.load(path, device=device)
     return agent

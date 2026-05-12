@@ -17,7 +17,7 @@ class SKWP_instance:
         self.p = np.random.uniform(1, 100, size=(self.K, self.M))
 
         # self.max_w =  self.w[:, :self.L] .max(axis=0)
-        self.max_w = self.compute_max() + 10
+        self.max_w = self.compute_max() * 1.01
         self.max_e_inv = (self.p[:, self.L:] / self.w[:, self.L:]).max(axis=1)
         pass
 
@@ -31,14 +31,18 @@ class SKWP_instance:
         cs = np.cumsum(w_sorted, axis=-1)
         sol = (cs < self.c[:, np.newaxis])
 
-        max_w = np.zeros(self.L)
+        if sol.sum() == 0:
+            min_efficiency = self.p[:, :self.L].min() / self.c.max()
+        else:
+            min_efficiency = efficiency_sorted[sol].min()
+        max_w = self.p[:, :self.L].max(axis=0) / min_efficiency
 
-        for i in range(self.L):
-            max_w[i] = (self.p[:, i].min() / efficiency_sorted[0, :]).max()
-            for k in range(self.K):
-                for j in range(1, sol.shape[1]):
-                    if self.p[k, i] / efficiency_sorted[k, j] + cs[k, j - 1] <= self.c[k]:
-                        max_w[i] = self.p[k, i] / efficiency_sorted[k, j]
+        # for i in range(self.L):
+        #     max_w[i] = self.p[:, i].max() / min_efficiency
+            # for k in range(self.K):
+            #     for j in range(1, sol.shape[1]):
+            #         if self.p[k, i] / efficiency_sorted[k, j] + cs[k, j - 1] <= self.c[k]:
+            #             max_w[i] = self.p[k, i] / efficiency_sorted[k, j]
 
         return max_w
 

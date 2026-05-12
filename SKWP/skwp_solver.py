@@ -23,135 +23,59 @@ class SKWP:
         self.time = None
         self.final_gap = None
 
-        self.x = self.model.addMVar((self.inst.K, self.inst.M), vtype=GRB.BINARY)
+        self.x = None
 
-
-    def remove_sub_optimal(self, comb_k, k):
-        p = np.array([self.p[k][c].sum() for c in comb_k])
-        to_exclude = np.zeros_like(p, dtype=bool)
-        follower_feasible = np.zeros_like(p, dtype=bool)
-        for c_idx, c in enumerate(comb_k):
-            c_f = [i for i in c if i >= self.inst.L]
-            if len(c_f) == len(c):
-                to_exclude[c_idx] = True
-                if self.w[k][c_f].sum() <= self.c[k]:
-                    follower_feasible[c_idx] = True
-            elif self.w[k][c_f].sum() > self.c[k]:
-                to_exclude[c_idx] = True
-        p_follower = p * follower_feasible
-        max_idx = np.argmax(p_follower)
-        max_val = p_follower[max_idx]
-        non_follower = 1 - to_exclude
-        non_follower[max_idx] = True
-        new_comb_k = [comb_k[i] for i in range(len(comb_k)) if non_follower[i] and (p[i] >= max_val)]
-        return new_comb_k
-
-    def remove_sub_optimal_2(self, k):
-
-        leader_combs = []
-        for i in range(1, self.inst.L + 1):
-            leader_comb_i = [list(subset) for subset in itertools.combinations(range(0, self.inst.L), i)]
-            p = self.p[k][leader_comb_i].sum(axis=-1)
-            max_idx = np.argmax(p)
-            leader_combs.append(leader_comb_i[max_idx])
-        follower_combs = []
-        for i in range(1, self.inst.L + 1):
-            follower_combs_i = [list(subset) for subset in itertools.combinations(range(self.inst.L, self.inst.M), i)]
-            w = self.w[k][follower_combs_i].sum(axis=-1)
-            follower_combs += [comb for j, comb in enumerate(follower_combs_i) if w[j] <= self.c[k]]
-
-        combs = leader_combs + [l + f for l in leader_combs for f in follower_combs]
-
-        return combs
-
-    def solve(self, verbose=False):
+    def solve(self, verbose=False, time_limit=None):
         if not verbose:
             self.model.setParam('OutputFlag', 0)
-        tt = time.time()
-        combs = {}
-        combs_bool = {}
-        z = {}
-        s = {}
 
+        if self.inst.K >= 360 and self.inst.M >= 360:
+            self.model.setParam('Threads', 4)
+            self.model.setParam('SoftMemLimit', 90)
+
+        tt = time.time()
         w = self.model.addMVar(self.inst.L)
         t = self.model.addMVar((self.inst.K, self.inst.L))
-        for k in range(self.inst.K):
+        d_L = self.model.addMVar((self.inst.K, self.inst.L))  # deficiency
+        d = self.w / self.p
+        x = self.model.addMVar((self.inst.K, self.inst.M), vtype=GRB.BINARY)
+        W = self.c
 
-            # lst = list(range(self.inst.M))
-            # combs_k = [list(subset) for r in range(1, len(lst) + 1) for subset in itertools.combinations(lst, r)]
-            # combs[k] = self.remove_sub_optimal(combs_k, k)
-            combs[k] = self.remove_sub_optimal_2(k)
-            combs_bool[k] = np.zeros((len(combs[k]), self.inst.M), dtype=bool)
-            z[k] = self.model.addMVar(len(combs[k]), vtype=GRB.BINARY)
-            s[k] = self.model.addMVar(len(combs[k]), vtype=GRB.BINARY)
+        # init sol
 
-            for c_idx, c in enumerate(combs[k]):
-                combs_bool[k][c_idx, c] = True
+        e_max = 1 / d
+        idx_e_max = np.argmax(e_max[:, self.inst.L:], axis=1) + self.inst.L
+        idx_p_min = np.argmin(self.p[:, :self.inst.L], axis=1)
+        w_max = self.w[range(self.inst.K), idx_e_max]
+        w_init = np.ones((self.inst.K, self.inst.L)) * 10 ** 5 + 1
+        w_init[range(self.inst.K), idx_p_min] = w_max / self.p[range(self.inst.K), idx_p_min]
+        w_init = w_init.min(axis=0)
+        w_init[w_init > 10 ** 5] = 0
+        w.Start = w_init
 
-            self.model.addConstr(z[k].sum() == 1, name='z ' + str(k))
+        self.model.addConstr(t.sum(axis=1) + (self.w[:, self.inst.L:] * x[:, self.inst.L:]).sum(axis=1) <= self.c, name='t ')
+        self.model.addConstr(t >= w - (1 - x[:, :self.inst.L]) * W.max(), name='cap ')
+        self.model.addConstr(t <= w, name='t < w ')
 
-            self.model.addConstr((combs_bool[k] * self.x[k]).sum(axis=1) >= combs_bool[k].sum(axis=1) * z[k],
-                                 name='x > z ' + str(k))
-            self.model.addConstr(self.x[k].sum() <=
-                                 combs_bool[k].sum(axis=1) + (1 - z[k]) * (self.inst.M - combs_bool[k].sum(axis=1)),
-                                 name='x < z ' + str(k))
+        self.model.addConstr(t <= x[:, :self.inst.L] * np.repeat(W.reshape(self.inst.K, 1), self.inst.L, axis=1), name='t < xW ')
+        self.model.addConstr(d_L == w / self.p[:, :self.inst.L], name='d_L ')
 
-            self.model.addConstr(
-                t[k].sum() + combs_bool[k][:, self.inst.L:] @ self.w[k][self.inst.L:] <=
-                self.c[k] + (1 - s[k]) * (combs_bool[k][:, self.inst.L:] @ self.w[k][self.inst.L:]),
-                name='ww')
+        max_d = self.c / self.p.min(axis=1)
+        for i in range(self.inst.L):
+            for j in range(self.inst.L):
+                self.model.addConstr(d_L[:, i] - (1 - x[:, i]) * max_d <= d_L[:, j] + x[:, j] * max_d,
+                                     name='d_Li < d_Lj ' + str(i) + ' ' + str(j))
 
-            # Precompute p sums
-            n_combs = len(combs[k])
-            p_sums = combs_bool[k] @ self.p[k]
+        for i in range(self.inst.L):
+            for j in range(self.inst.L, self.inst.M):
+                self.model.addConstr(d_L[:, i] - (1 - x[:, i]) * max_d <= d[:, j] + x[:, j] * max_d,
+                                     name='d_Li < dj ' + str(i) + ' ' + str(j))
 
-            # Create all pairs
-            c_indices = np.repeat(np.arange(n_combs), n_combs)
-            q_indices = np.tile(np.arange(n_combs), n_combs)
-            total_pairs = len(c_indices)
-
-            # Build matrices
-            p_coeff = np.zeros((total_pairs, n_combs))
-            z_coeff = np.zeros((total_pairs, n_combs))
-            s_coeff = np.zeros((total_pairs, n_combs))
-
-            row_indices = np.arange(total_pairs)
-
-            # p_sums[c] - p_sums[q]
-            p_coeff[row_indices, c_indices] = 1
-            p_coeff[row_indices, q_indices] -= 1
-
-
-            # compute M and N
-
-            M = self.p[k].sum() + (combs_bool[k][:, :self.inst.L:] @ self.p[k][:self.inst.L]).max()
-            N = self.c[k]
-
-            # M*z[c] + M*s[c] (from RHS: -M*(1-z) - M*(1-s) = -2M + M*z + M*s)
-            z_coeff[row_indices, c_indices] = M  # Note: positive sign
-            s_coeff[row_indices, c_indices] = M  # Note: positive sign
-
-            # RHS: -2M
-            rhs = np.full(total_pairs, -2 * M)
-
-            # Add constraint: p_sums[c] - p_sums[q] + M*z[c] + M*s[c] >= -2M
-            # Which simplifies to: p_sums[c] + M*z[c] + M*s[c] >= p_sums[q] - 2M
-            self.model.addConstr(
-                p_coeff @ p_sums + z_coeff @ z[k] + s_coeff @ s[k] >= rhs,
-                name=f"profit_comp_k{k}"
-            )
-
-            for i in range(self.inst.L):
-                self.model.addConstr(t[k, i] <= self.x[k, i] * N, name='t < x ' + str(k) + ' ' + str(i))
-                self.model.addConstr(w[i] - t[k, i] <= (1 - self.x[k, i]) * N, name='p - t >  ' + str(k) + ' ' + str(i))
-                self.model.addConstr(t[k, i] <= w[i], name='t < p ' + str(k) + ' ' + str(i))
-
+        constr_time = time.time() - tt
         self.model.setObjective(t.sum(), gb.GRB.MAXIMIZE)
+        if time_limit is not None:
+            self.model.setParam('TimeLimit', time_limit - constr_time)
 
-        if verbose:
-            print('Constraints time', time.time() - tt)
-
-        self.model.setParam('DualReductions', 0)
         self.model.optimize()
         self.time = time.time() - tt
 
@@ -164,168 +88,100 @@ class SKWP:
         self.obj = self.model.objVal
 
         self.final_gap = self.model.MIPGap
+
         return self.model.objVal,  w.x
 
 
 
-
-class SKWP_greedy:
-
-    def __init__(self, problem: SKWP_instance):
-
-        self.model = gb.Model("SKWP")
-
-        self.inst = problem
-        self.p = problem.p
-        self.w = problem.w
-        self.c = problem.c
-        self.obj = None
-        self.time = None
-        self.final_gap = None
-
-        self.x = self.model.addMVar((self.inst.K, self.inst.M), vtype=GRB.BINARY, name='x')
-
-
-    def solve(self, verbose=False, init_solution=None, x_solution=None):
-        if not verbose:
-            self.model.setParam('OutputFlag', 0)
-        tt = time.time()
-
-        w = self.model.addMVar(self.inst.L, name='w')
-        z = self.model.addMVar((self.inst.K, self.inst.M, self.inst.M), vtype=GRB.BINARY, name='z')
-        if init_solution is not None:
-            self.model.addConstr(w == init_solution, name='init_solution')
-            self.model.addConstr(self.x == x_solution, name='x_init_solution')
-            pass
-        t = self.model.addMVar((self.inst.K, self.inst.L), name='t')
-        # self.model.addConstr(z == 1 - self.x)
-        for k in range(self.inst.K):
-
-            self.model.addConstr(t[k].sum() + (self.w[k, self.inst.L:] * self.x[k, self.inst.L:]).sum()
-                                 <= self.c[k], name='cap' + str(k))
-
-            # self.model.addConstr(z[k, 0, 1] == 0)
-            for i in range(self.inst.M):
-                for j in range(self.inst.M):
-                    self.model.addConstr(z[k, i, j] >= self.x[k, i] - self.x[k, j], name='z1' + str(k) + ' ' + str(i) + ' ' + str(j))
-                    self.model.addConstr(z[k, i, j] <= 1 - self.x[k, j], name='z2' + str(k) + ' ' + str(i) + ' ' + str(j))
-
-            for i in range(self.inst.L):
-                self.model.addConstr(t[k, i] <= self.x[k, i] * self.inst.max_w[i], name='t < x ' + str(k) + ' ' + str(i))
-                self.model.addConstr(w[i] - t[k, i] <= (1 - self.x[k, i]) * self.inst.max_w[i], name='w - t >  ' + str(k) + ' ' + str(i))
-                self.model.addConstr(t[k, i] <= w[i], name='t > w ' + str(k) + ' ' + str(i))
-
-                for j in range(self.inst.L):
-                    self.model.addConstr(t[k, i] / self.p[k, i] <=
-                                         w[j] / self.p[k, j] + (1 - z[k, i, j]) * self.inst.max_e_inv[k],
-                                         name='eff t < t ' + str(k) + ' ' + str(i) + ' ' + str(j))
-
-                for j in range(self.inst.L, self.inst.M):
-                    self.model.addConstr(t[k, i] / self.p[k, i] <=
-                                         self.w[k, j] / self.p[k, j] + (1 - z[k, i, j]) * self.inst.max_e_inv[k],
-                                         name='eff t < x ' + str(k) + ' ' + str(i) + ' ' + str(j))
-
-            for i in range(self.inst.L, self.inst.M):
-                for j in range(self.inst.L):
-                    self.model.addConstr(self.w[k, i] * self.x[k, i] / self.p[k, i]
-                                         <= w[j] / self.p[k, j] + (1 - z[k, i, j]) * self.inst.max_e_inv[k],
-                                         name='eff x < t ' + str(k) + ' ' + str(i) + ' ' + str(j))
-
-                for j in range(self.inst.L, self.inst.M):
-                    self.model.addConstr(self.w[k, i] * self.x[k, i] / self.p[k, i]
-                                         <= self.w[k, j] / self.p[k, j] + (1 - z[k, i, j]) * self.inst.max_e_inv[k],
-                                         name='eff x < x  ' + str(k) + ' ' + str(i) + ' ' + str(j))
-
-        self.model.setObjective(t.sum(), gb.GRB.MAXIMIZE)
-
-        if verbose:
-            print('Constraints time', time.time() - tt)
-
-        # self.model.setParam('DualReductions', 0)
-        self.model.optimize()
-
-
-
-        self.time = time.time() - tt
-
-        if self.model.Status == GRB.INFEASIBLE:
-            self.model.computeIIS()
-            for c in self.model.getConstrs():
-                if c.IISConstr: print(f'\t{c.constrname}: {self.model.getRow(c)} {c.Sense} {c.RHS}')
-        if self.model.Status == GRB.UNBOUNDED:
-            print('unbounded')
-        self.obj = self.model.objVal
-
-        self.final_gap = self.model.MIPGap
-        return self.model.objVal,  w.x
-
-
-class SKWP_greedy_single_K:
-
-    def __init__(self, problem: SKWP_instance):
-
-        self.model = gb.Model("SKWP")
-
-        self.inst = problem
-        self.p = problem.p
-        self.w = problem.w
-        self.c = problem.c
-        self.M = problem.M
-        self.L = problem.L
-        self.obj = None
-        self.time = None
-        self.final_gap = None
-        self.M_L = self.M - self.L
-        self.x = self.model.addMVar((self.M_L, self.L), vtype=GRB.BINARY, name='x')
-        self.y = self.model.addMVar((self.M_L,), vtype=GRB.BINARY, name='x')
-        self.w_var = self.model.addMVar((self.M_L, self.L), name='w')
-
-    def solve(self, verbose=False, init_solution=None, x_solution=None):
-        if not verbose:
-            self.model.setParam('OutputFlag', 0)
-        tt = time.time()
-
-
-
-
-        self.model.addConstr(self.x.sum(axis=1) <= 1 , name='select')
-
-        # self.model.addConstr(z[k, 0, 1] == 0)
-        for i in range(self.M_L):
-            for j in range(self.L):
-                self.model.addConstr(self.x[i, j] + self.y[i] <= 1, name='x + y' + str(i) + ' ' + str(j))
-                self.model.addConstr(self.w_var[i, j] <=
-                                     self.p[0, j] * self.w[0, i + self.L] / self.p[0, i + self.L],
-                                     name='w' + str(i) + ' ' + str(j))
-        indexes = np.argsort(-(self.p[0]/self.w[0])[self.L:])
-        for i in indexes:
-            up_to_i = indexes[:i]
-            before_i = up_to_i[:-1]
-            self.model.addConstr(self.c[0]*(1 - self.y[i]) + self.w_var[up_to_i, :].sum()
-                                 + (self.w[0, before_i + self.L] * self.y[before_i]).sum() <= self.w[0, i + self.L] ,
-                                 name='c residual ' + str(i))
-
-        self.model.addConstr(self.w_var.sum() + (self.w[0][self.L:] * self.y).sum() <= self.c[0], name='cap')
-
-        self.model.setObjective(self.w.sum(), gb.GRB.MAXIMIZE)
-
-        if verbose:
-            print('Constraints time', time.time() - tt)
-
-        # self.model.setParam('DualReductions', 0)
-        self.model.optimize()
-
-        self.time = time.time() - tt
-
-        if self.model.Status == GRB.INFEASIBLE:
-            self.model.computeIIS()
-            for c in self.model.getConstrs():
-                if c.IISConstr: print(f'\t{c.constrname}: {self.model.getRow(c)} {c.Sense} {c.RHS}')
-        if self.model.Status == GRB.UNBOUNDED:
-            print('unbounded')
-        self.obj = self.model.objVal
-
-        self.final_gap = self.model.MIPGap
-        return self.model.objVal, self.w.x
-
-
+#
+# class SKWP_greedy:
+#
+#     def __init__(self, problem: SKWP_instance):
+#
+#         self.model = gb.Model("SKWP")
+#
+#         self.inst = problem
+#         self.p = problem.p
+#         self.w = problem.w
+#         self.c = problem.c
+#         self.obj = None
+#         self.time = None
+#         self.final_gap = None
+#
+#         self.x = self.model.addMVar((self.inst.K, self.inst.M), vtype=GRB.BINARY, name='x')
+#
+#
+#     def solve(self, verbose=False, init_solution=None, x_solution=None):
+#         if not verbose:
+#             self.model.setParam('OutputFlag', 0)
+#         tt = time.time()
+#
+#         w = self.model.addMVar(self.inst.L, name='w')
+#         z = self.model.addMVar((self.inst.K, self.inst.M, self.inst.M), vtype=GRB.BINARY, name='z')
+#         if init_solution is not None:
+#             self.model.addConstr(w == init_solution, name='init_solution')
+#             self.model.addConstr(self.x == x_solution, name='x_init_solution')
+#             pass
+#         t = self.model.addMVar((self.inst.K, self.inst.L), name='t')
+#         # self.model.addConstr(z == 1 - self.x)
+#         for k in range(self.inst.K):
+#
+#             self.model.addConstr(t[k].sum() + (self.w[k, self.inst.L:] * self.x[k, self.inst.L:]).sum()
+#                                  <= self.c[k], name='cap' + str(k))
+#
+#             # self.model.addConstr(z[k, 0, 1] == 0)
+#             for i in range(self.inst.M):
+#                 for j in range(self.inst.M):
+#                     self.model.addConstr(z[k, i, j] >= self.x[k, i] - self.x[k, j], name='z1' + str(k) + ' ' + str(i) + ' ' + str(j))
+#                     self.model.addConstr(z[k, i, j] <= 1 - self.x[k, j], name='z2' + str(k) + ' ' + str(i) + ' ' + str(j))
+#
+#             for i in range(self.inst.L):
+#                 self.model.addConstr(t[k, i] <= self.x[k, i] * self.inst.max_w[i], name='t < x ' + str(k) + ' ' + str(i))
+#                 self.model.addConstr(w[i] - t[k, i] <= (1 - self.x[k, i]) * self.inst.max_w[i], name='w - t >  ' + str(k) + ' ' + str(i))
+#                 self.model.addConstr(t[k, i] <= w[i], name='t > w ' + str(k) + ' ' + str(i))
+#
+#                 for j in range(self.inst.L):
+#                     self.model.addConstr(t[k, i] / self.p[k, i] <=
+#                                          w[j] / self.p[k, j] + (1 - z[k, i, j]) * self.inst.max_e_inv[k],
+#                                          name='eff t < t ' + str(k) + ' ' + str(i) + ' ' + str(j))
+#
+#                 for j in range(self.inst.L, self.inst.M):
+#                     self.model.addConstr(t[k, i] / self.p[k, i] <=
+#                                          self.w[k, j] / self.p[k, j] + (1 - z[k, i, j]) * self.inst.max_e_inv[k],
+#                                          name='eff t < x ' + str(k) + ' ' + str(i) + ' ' + str(j))
+#
+#             for i in range(self.inst.L, self.inst.M):
+#                 for j in range(self.inst.L):
+#                     self.model.addConstr(self.w[k, i] * self.x[k, i] / self.p[k, i]
+#                                          <= w[j] / self.p[k, j] + (1 - z[k, i, j]) * self.inst.max_e_inv[k],
+#                                          name='eff x < t ' + str(k) + ' ' + str(i) + ' ' + str(j))
+#
+#                 for j in range(self.inst.L, self.inst.M):
+#                     self.model.addConstr(self.w[k, i] * self.x[k, i] / self.p[k, i]
+#                                          <= self.w[k, j] / self.p[k, j] + (1 - z[k, i, j]) * self.inst.max_e_inv[k],
+#                                          name='eff x < x  ' + str(k) + ' ' + str(i) + ' ' + str(j))
+#
+#         self.model.setObjective(t.sum(), gb.GRB.MAXIMIZE)
+#
+#         if verbose:
+#             print('Constraints time', time.time() - tt)
+#
+#         # self.model.setParam('DualReductions', 0)
+#         self.model.optimize()
+#
+#
+#
+#         self.time = time.time() - tt
+#
+#         if self.model.Status == GRB.INFEASIBLE:
+#             self.model.computeIIS()
+#             for c in self.model.getConstrs():
+#                 if c.IISConstr: print(f'\t{c.constrname}: {self.model.getRow(c)} {c.Sense} {c.RHS}')
+#         if self.model.Status == GRB.UNBOUNDED:
+#             print('unbounded')
+#         self.obj = self.model.objVal
+#
+#         self.final_gap = self.model.MIPGap
+#         return self.model.objVal,  w.x
+#
+#

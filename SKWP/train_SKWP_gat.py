@@ -1,4 +1,5 @@
 import time
+import datetime
 
 import numpy as np
 import torch
@@ -17,28 +18,31 @@ print('Experiments running on', device)
 
 METHOD = 'g'
 
-MIN_SIZE, MAX_SIZE = 20, 60
+MIN_SIZE, MAX_SIZE = 20, 50
 
 SAVE = True
-file_name = 'SKWP/NET/test_skwp_' + str(MIN_SIZE) + '_' + str(MAX_SIZE) + '__.pth'
+timestamp = str(datetime.datetime.now()).split('.')[0] 
+file_name = 'SKWP/NET/test_skwp_k1_' + str(MIN_SIZE) + '_' + str(MAX_SIZE) + '_' + timestamp +'.pth'
+print(file_name)
 
 M = range(MIN_SIZE, MAX_SIZE)
 K = range(MIN_SIZE, MAX_SIZE)
 SEED = 1
 
-HIDDEN = 64
+HIDDEN = 128
 
 N_SAMPLES = 2
 ITERATIONS = 500
-EPISODE_PER_BATCH = 512
+EPISODE_PER_BATCH = 1024
 
-BASELINE_ITERATIONS = 200
+BASELINE_ITERATIONS = 1000
 POPULATION = N_SAMPLES
 
-lr = 0.001
+lr = 0.0001
 wd = 0.0001
-STD_MAX = 0.1
-agent = EGAT(7, 6, HIDDEN, 2, std_max=STD_MAX, lr=lr, wd=wd, device=device)
+entropy_coef = 0.001
+max_norm=10.0
+agent = EGAT(7, 6, HIDDEN, 2, lr=lr, wd=wd, device=device)
 
 BEST_GAP = 0
 t = time.time()
@@ -70,7 +74,7 @@ for iteration in range(ITERATIONS):
         vals, agent_best_val = inst.eval_sample(inst_sample_tensor, method=METHOD)
         rewards += np.repeat(vals, inst.L).tolist()
 
-        random_best_val = inst.random_baseline(N_SAMPLES, method=METHOD)
+        random_best_val = inst.random_baseline(N_SAMPLES, method=METHOD) + 1e-6
         randoms += [random_best_val for _ in range(inst.L * N_SAMPLES)]
 
         wins += g.best_val < agent_best_val
@@ -79,7 +83,7 @@ for iteration in range(ITERATIONS):
         rand_gaps += [agent_best_val/random_best_val if random_best_val > 0 else 0]
         rand_ga_gaps += [g.best_val/random_best_val if g.best_val > 0 else 0]
 
-    if iteration > 0 and BEST_GAP < np.mean(gaps):
+    if iteration > 5 and BEST_GAP < np.mean(gaps):
         agent.best_gap = np.mean(gaps)
         if SAVE:
             agent.save(file_name, )
@@ -92,7 +96,7 @@ for iteration in range(ITERATIONS):
 
     log_prices = torch.cat(log_prices)
 
-    loss = agent.train_policy(log_prices, reward_tensor, baseline_tensor)
+    loss = agent.train_policy(log_prices, reward_tensor, baseline_tensor, entropy_coef=entropy_coef, max_norm=max_norm)
 
     if iteration % 1 == 0:
         max_agent = reward_tensor.max().item()

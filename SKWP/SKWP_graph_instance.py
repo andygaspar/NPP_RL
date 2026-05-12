@@ -24,20 +24,26 @@ class SKWPGraph(SKWP_instance):
         for i in range(self.M):
             item_type = 1 if i < self.L else 0  # 1 for type A, 0 for type B
             # Feature: [value, *, one hot]
-            if self.extended:
-                item_feature = [self.p[:, i].mean(), self.w[:, i].mean() * (1 - item_type), self.max_w[i] if i < self.L else 0, 0,  0, 1 - item_type, item_type]
-            else:
-                item_feature = [self.p[:, i].mean(), self.w[:, i].mean() * (1 - item_type), 0, 0, 1 - item_type, item_type]
+
+            item_feature = [self.p[:, i].mean(),
+                            self.w[:, i].mean() if i >= self.L else 0,
+                            self.max_w[i] if i < self.L else 0,
+                            0,  # corresponding to user features
+                            0,  # corresponding to user one hot encoding
+                            1 - item_type,
+                            item_type]
+
             item_features.append(item_feature)
 
         # Create user node features
         user_features = []
         for k in range(self.K):
             # Feature: [capacity, 0 for padding, 1 for indicating user node]
-            if self.extended:
-                user_feature = [0, 0, self.c[k], 0, 1, 0, 0]
-            else:
-                user_feature = [0, 0, self.c[k], 1, 0, 0]
+            user_feature = [0, 0, 0,  # all corresponding to item features
+                            self.c[k], 1,
+                            0, 0  # corresponding to item one hot encoding
+                            ]
+
             user_features.append(user_feature)
 
         # Concatenate all node features
@@ -55,25 +61,27 @@ class SKWPGraph(SKWP_instance):
 
                 # Edge feature: [weight, item_type]
                 item_type = 0 if i < self.L else 1
-                if self.extended:
-                    edge_feature = [self.w[k, i] * item_type, self.p[k, i], self.p[k, i] * item_type /self.w[k, i], 0,  item_type, 1 - item_type]
-                else:
-                    edge_feature = [self.w[k, i] * item_type, self.p[k, i], item_type, 1 - item_type]
+
+                edge_feature = [self.w[k, i] * item_type,
+                                self.p[k, i],
+                                self.p[k, i] * item_type / self.w[k, i],
+                                0,
+                                item_type,
+                                1 - item_type]
                 edge_features.append(edge_feature)
 
-        if self.extended:
-            for i in range(self.M):
-                for j in range(i + 1, self.M):
-                    edge_indices.append([i, j])
-                    edge_feature = [0, 0, 0, 1, 0, 0]
-                    edge_features.append(edge_feature)
+        #  empty link between items
+        for i in range(self.M):
+            for j in range(i + 1, self.M):
+                edge_indices.append([i, j])
+                edge_feature = [0, 0, 0, 1, 0, 0]
+                edge_features.append(edge_feature)
 
         edge_index = torch.tensor(edge_indices, dtype=torch.long).t().contiguous()
         edge_attr = torch.tensor(edge_features, dtype=torch.float)
 
         # Make graph undirected (optional)
         edge_index, edge_attr = to_undirected(edge_index, edge_attr=edge_attr)
-
 
         # Create PyG Data object
         data = Data(
@@ -86,18 +94,9 @@ class SKWPGraph(SKWP_instance):
             L=self.L,  # Number of type A items
         )
 
-        norm_vals = data.x.max(dim=0)[0]
         cap_max = self.c.max()
-        for i in range(3):
-            data.x[:, i] /= cap_max
-
-        edge_norm_vals = data.edge_attr.max(dim=0)[0]
-        if self.extended:
-
-            data.edge_attr[:, :4] /= cap_max
-
-        else:
-            data.edge_attr[:, :2] /= cap_max
+        data.x[:, :4] /= cap_max
+        data.edge_attr[:, :3] /= cap_max
 
         return data
 
@@ -107,7 +106,7 @@ class SKWPGraph(SKWP_instance):
     def eval_sample(self, sample_tensor: torch.Tensor, method='e'):
         w = self.rescale_w(sample_tensor)
         from KP_Solver.knap_cpp import KnapCpp
-        bb = KnapCpp(self, pop_size=sample_tensor.shape[0])
+        bb = KnapCpp(self, batch_size=sample_tensor.shape[0])
         if method == 'e':
             print('DEBUG')
             return bb.solve_skwp(w)
@@ -122,7 +121,7 @@ class SKWPGraph(SKWP_instance):
     def random_baseline(self, sample_size, method='e'):
         random_sol = np.random.uniform(0, self.max_w, (sample_size, self.L))
         from KP_Solver.knap_cpp import KnapCpp
-        bb = KnapCpp(self, pop_size=sample_size)
+        bb = KnapCpp(self, batch_size=sample_size)
         if method == 'e':
             print('DEBUG')
             _, max_val =  bb.solve_skwp(random_sol)

@@ -8,28 +8,61 @@ from GAT.gat import load_agent
 from SKWP.skwp_solver import SKWP
 
 EXTENDED = True
+model_name = 'test_skwp_20_50_2026-02-27 22:48:24'
 
-file_name = 'SKWP/NET/test_skwp_20_60__.pth'
+
+# ***************************************  DAAAAAAAAAAAAAAAAAAAAAAAAA CAMBIARE!! NEI TEST CON QUELLO SOPRA
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+model_name = 'test_skwp_20_50'
+
+
+
+
+
+
+
+
+
+
+
+
+# ***************************************
+
+file_name = 'SKWP/NET/' + model_name + '.pth'
 # df_exact = pd.read_csv('NPP/Results/exact_results.csv')
 
 agent = load_agent(file_name)
 device = agent.device
 
-agent.std_max = 0.1
-
-BASELINE_ITERATIONS = 1000
-POPULATION = 256
+BASELINE_ITERATIONS = 10 # ************************ ANCHE QUA
+POPULATION = 8   # ************************ ANCHE QUA
 
 TIME_LIMIT = 1800
 METHOD = 'g'
 
-CASES = [(30, 1), (60, 1), (90, 1), (180, 1), (360, 1), (720, 1)]
-# CASES = [ (90, 1), (10, 90), (90, 10)]
-# CASES = [(10, 90), (90, 10)]
+CASES = [(360, 360), (450, 450), (20, 450), (450, 20)]#[(10, 10), (15, 15), (20, 20), (56, 56), (90, 90), (180, 180), (360, 360), (450, 450), (20, 450), (450, 20)]
+SINGLE_COMMODITY = []#[(20, 1), (56, 1), (90, 1), (180, 1), (360, 1), (450, 1)]
+CASES = SINGLE_COMMODITY + CASES
 
-SOLVER_CASES = [(10, 10), (15, 15)]
-SOLVER_CASES = []
-case_num = dict(zip(CASES, range(len(CASES))))
+
+SOLVER_CASES = CASES
+
+case_num = dict(zip(CASES, range(12, 12 + len(CASES))))
 
 N_RUNS = 10
 
@@ -40,6 +73,10 @@ columns = ['run', 'commodities', 'paths',
            'time_exact', 'time_nn_ga','time_nn', 'time_ga', 'case_num']
 
 df = pd.DataFrame(columns=columns)
+exact_columns = ['run', 'commodities', 'paths',
+           'obj_exact', 'mip_GAP', 'status',
+           'time_exact', 'case_num']
+df_exact = pd.DataFrame(columns=exact_columns)
 
 for case in CASES:
     paths, comm = case
@@ -49,35 +86,42 @@ for case in CASES:
         instance = SKWPGraph(paths, comm, extended=EXTENDED)
 
         ga = GA_SKWP(instance, pop_size=POPULATION, method=METHOD)
-        ga.run(BASELINE_ITERATIONS, verbose=False)
+        ga.run(BASELINE_ITERATIONS)
 
         ga_nn = GA_SKWP(instance, pop_size=POPULATION, method=METHOD)
         net_time = time.time()
         samples = agent.get_distribution(instance, POPULATION)
-        # print(samples.std(dim=0))
+
         _, net_best_sample = instance.eval_sample(samples, method=METHOD)
         net_time = time.time() - net_time
 
         mean_val = instance.eval(agent.get_mean(instance), method=METHOD)
 
-        ga_nn.run(BASELINE_ITERATIONS, init_population=instance.rescale_w(samples), verbose=False)
+        ga_nn.run(BASELINE_ITERATIONS, init_population=instance.rescale_w(samples))
         wins += ga.best_val <= ga_nn.best_val
         gaps += [ga_nn.best_val / ga.best_val] if ga.best_val > 0 else ([-1] if ga_nn.best_val > 0 else [-2])
-        print(ga_nn.best_val / ga.best_val)
 
         if case in SOLVER_CASES:
             solver = SKWP(instance)
-            obj, sol = solver.solve(verbose=False)
+            obj, sol = solver.solve(verbose=True, time_limit=TIME_LIMIT)
             solver_time, solver_obj, solver_final_gap, solver_status = (
                 solver.time, solver.obj, solver.final_gap, solver.model.status)
         else:
             solver_time, solver_obj, solver_final_gap, solver_status = [-1] * 4
 
         exact_gaps += [ga_nn.best_val / solver_obj]
+        print(ga_nn.best_val / ga.best_val, ga_nn.best_val / solver_obj)
         df.loc[df.shape[0]] = [run, comm, paths,
                                solver_obj, ga_nn.best_val, net_best_sample, mean_val, ga.best_val,
                                solver_final_gap, solver_status,
                                solver_time, ga_nn.time + net_time, net_time, ga.time, case_num[case]]
+        df_exact.loc[df_exact.shape[0]] = [run, comm, paths,
+                               solver_obj,
+                               solver_final_gap, solver_status,
+                               solver_time, case_num[case]]
 
     print(paths, comm, wins / N_RUNS, np.mean(gaps), np.mean(exact_gaps))
-    df.to_csv('SKWP/Results/test_.csv')
+    df.to_csv('SKWP/Results/' + model_name + '_2.csv')
+    df_exact.to_csv('SKWP/Results/' + 'exact_results_2.csv', index=False)
+
+

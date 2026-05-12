@@ -2,7 +2,7 @@ import random
 import numpy as np
 
 from NPP.Instance.instance import Instance
-from NPP.Solver.solver import GlobalSolver
+from NPP.Solver.solver import NPPSolver
 
 # from Net.network_manager import NetworkManager
 
@@ -34,7 +34,7 @@ npp.show()
 
 
 # Solver
-solver = GlobalSolver(npp)
+solver = NPPSolver(npp)
 solver.solve()
 print("Step 0: Pedaggi ottimali per ciascun percorso:", solver.solution_array)
 
