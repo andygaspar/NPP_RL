@@ -31,7 +31,7 @@ def truncated_normal_log_prob(x, mu, sigma, low=0, high=1):
 # Node Classification Model using EGAT
 class EGAT(torch.nn.Module):
     def __init__(self, node_channels, edge_channels, hidden_channels=64, out_channels=2, lr=0.001, wd=0.0001, heads=3,
-                 dropout=0.5, device=torch.device('cpu')):
+                 dropout=0.5, std_max=0.03, device=torch.device('cpu')):
         super().__init__()
 
         self.node_channels = node_channels
@@ -41,6 +41,7 @@ class EGAT(torch.nn.Module):
         self.heads_init = heads
         self.dropout_init = dropout
         self.device = device
+        self.std_max = std_max
 
         self.best_gap = 0
 
@@ -99,7 +100,7 @@ class EGAT(torch.nn.Module):
         sigma_raw = x[:, 1]
 
         mu = 0.5 + 0.5 * torch.tanh(mu_raw)
-        sigma = 0.005 + torch.sigmoid(sigma_raw) * 0.03
+        sigma = 0.005 + torch.sigmoid(sigma_raw) * self.std_max
         # mu = torch.sigmoid(mu_raw)  # Full [0,1] range, learnable center
         # sigma = 0.01 + torch.sigmoid(sigma_raw) * 0.49  # σ ∈ [0.01, 0.5] for exploration
 
@@ -144,9 +145,11 @@ class EGAT(torch.nn.Module):
             advantage = (advantage - advantage.mean()) / (advantage.std() + 1e-8)
 
 
-        loss = -(advantage * log_action).mean()
-        entropy = -(torch.exp(log_action) * log_action).mean()
-        loss = loss - 0.01 * entropy
+        # loss = -(advantage * log_action).mean() + (reward/baseline).mean()
+        loss = -(reward/baseline- 1).mean() * log_action
+
+        # entropy = -(torch.exp(log_action) * log_action).mean()
+        # loss = loss - 0.01 * entropy
 
         self.optimizer.zero_grad()
         loss.backward()
@@ -173,7 +176,7 @@ class EGAT(torch.nn.Module):
             'init_params': {'node_channels': self.node_channels, 'edge_channels': self.edge_channels,
                             'hidden_init': self.hidden_init, 'output_init': self.output_init,
                             'heads_init': self.heads_init, 'dropout_init': self.dropout_init,
-                            'best_gap': self.best_gap
+                            'best_gap': self.best_gap, 'std_max': self.std_max
                             },
         }
 
@@ -204,9 +207,14 @@ def load_agent(path, device=None) -> EGAT:
         device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
     init_params = torch.load(path, map_location=device, weights_only=False)['init_params']
-    agent = EGAT(node_channels=init_params['node_channels'], edge_channels=init_params['edge_channels'],
-                 hidden_channels=init_params['hidden_init'], out_channels=init_params['output_init'],
-                 heads=init_params['heads_init'], dropout=init_params['dropout_init'])
+    if 'std_max' in init_params.keys():
+        agent = EGAT(node_channels=init_params['node_channels'], edge_channels=init_params['edge_channels'],
+                     hidden_channels=init_params['hidden_init'], out_channels=init_params['output_init'],
+                     heads=init_params['heads_init'], dropout=init_params['dropout_init'], std_max=init_params['std_max'])
+    else:
+        agent = EGAT(node_channels=init_params['node_channels'], edge_channels=init_params['edge_channels'],
+                     hidden_channels=init_params['hidden_init'], out_channels=init_params['output_init'],
+                     heads=init_params['heads_init'], dropout=init_params['dropout_init'])
     agent.best_gap = init_params['best_gap']
     agent.load(path, device=device)
     return agent

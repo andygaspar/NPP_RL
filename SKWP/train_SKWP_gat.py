@@ -17,10 +17,10 @@ print('Experiments running on', device)
 
 METHOD = 'g'
 
-MIN_SIZE, MAX_SIZE = 20, 50
+MIN_SIZE, MAX_SIZE = 20, 60
 
 SAVE = True
-file_name = 'SKWP/NET/test_skwp_' + str(MIN_SIZE) + '_' + str(MAX_SIZE) + '.pth'
+file_name = 'SKWP/NET/test_skwp_' + str(MIN_SIZE) + '_' + str(MAX_SIZE) + '__.pth'
 
 M = range(MIN_SIZE, MAX_SIZE)
 K = range(MIN_SIZE, MAX_SIZE)
@@ -30,14 +30,15 @@ HIDDEN = 64
 
 N_SAMPLES = 2
 ITERATIONS = 500
-EPISODE_PER_BATCH = 256
+EPISODE_PER_BATCH = 512
 
-BASELINE_ITERATIONS = 100
+BASELINE_ITERATIONS = 200
 POPULATION = N_SAMPLES
 
 lr = 0.001
 wd = 0.0001
-agent = EGAT(7, 6, HIDDEN, 2, lr=lr, wd=wd, device=device)
+STD_MAX = 0.1
+agent = EGAT(7, 6, HIDDEN, 2, std_max=STD_MAX, lr=lr, wd=wd, device=device)
 
 BEST_GAP = 0
 t = time.time()
@@ -78,7 +79,7 @@ for iteration in range(ITERATIONS):
         rand_gaps += [agent_best_val/random_best_val if random_best_val > 0 else 0]
         rand_ga_gaps += [g.best_val/random_best_val if g.best_val > 0 else 0]
 
-    if iteration > 5 and BEST_GAP < np.mean(gaps):
+    if iteration > 0 and BEST_GAP < np.mean(gaps):
         agent.best_gap = np.mean(gaps)
         if SAVE:
             agent.save(file_name, )

@@ -1,6 +1,6 @@
 import pandas as pd
 
-df = pd.read_csv('Results/test_20_90.csv')
+df = pd.read_csv('NPP/Results/test_fede.csv')
 
 df['ga_ga_nn_gap'] = 100*(1 - df.obj_nn_ga/df.obj_exact)
 df['ga_ga_gap'] = 100*(1 - df.obj_ga/df.obj_exact)

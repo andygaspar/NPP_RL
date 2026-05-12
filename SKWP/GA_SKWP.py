@@ -16,12 +16,14 @@ class GA_SKWP:
         self.population = None
         self.fitness = np.ones(self.pop_size + self.off_size) * (-1e4)
         self.solver = KnapCpp(self.instance, pop_size=self.off_size)
-        self.best_val = None
+        self.best_val = 0
         self.best_solution = None
         self.avg_fitness = None
         self.time = None
 
-        self.solver_fun = self.solver.solve_skwp if method == 'e' else self.solver.solve_skwp_greedy
+        # self.solver_fun = self.solver.solve_skwp if method == 'e' else self.solver.solve_skwp_greedy
+        self.solver_fun = self.solver.solve_skwp_greedy
+
 
     def run(self, iterations, init_population=None, verbose=False):
         if init_population is None:
@@ -36,6 +38,7 @@ class GA_SKWP:
         percentage = self.instance.max_w * 0.5
         # Sort indices by fitness (descending)
         indices = np.argsort(self.fitness)[::-1]
+        not_improving = 0
         for gen in range(iterations):
 
             parents_idxs = np.random.choice(indices[:self.pop_size], (self.off_size, 2))
@@ -52,10 +55,19 @@ class GA_SKWP:
             indices = np.argsort(self.fitness)[::-1]
 
             # Print progress
+            if self.best_val == self.fitness[indices[0]]:
+                not_improving += 1
+            else:
+                not_improving = 0
             self.best_val = self.fitness[indices[0]]
             self.avg_fitness = np.mean(self.fitness)
             if verbose and (gen % 50 == 0 or gen == iterations - 1):
-                print(f"Gen {gen}: Best={self.best_val:.2f}, Avg={self.avg_fitness:.2f}")
+                print(f"Gen {gen}: Best={self.best_val:.2f}, Avg={self.avg_fitness:.2f}, Std={self.fitness.std():.2f}")
+            if not_improving == 10000:
+                self.population[indices[1:self.pop_size]] = np.random.uniform(1e-6, self.instance.max_w,
+                                                    size=(self.pop_size - 1, self.instance.L))
+
+
         self.time = time.time() - self.time
         self.best_solution = self.population[indices[0]]
 

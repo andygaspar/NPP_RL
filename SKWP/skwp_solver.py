@@ -260,3 +260,72 @@ class SKWP_greedy:
         return self.model.objVal,  w.x
 
 
+class SKWP_greedy_single_K:
+
+    def __init__(self, problem: SKWP_instance):
+
+        self.model = gb.Model("SKWP")
+
+        self.inst = problem
+        self.p = problem.p
+        self.w = problem.w
+        self.c = problem.c
+        self.M = problem.M
+        self.L = problem.L
+        self.obj = None
+        self.time = None
+        self.final_gap = None
+        self.M_L = self.M - self.L
+        self.x = self.model.addMVar((self.M_L, self.L), vtype=GRB.BINARY, name='x')
+        self.y = self.model.addMVar((self.M_L,), vtype=GRB.BINARY, name='x')
+        self.w_var = self.model.addMVar((self.M_L, self.L), name='w')
+
+    def solve(self, verbose=False, init_solution=None, x_solution=None):
+        if not verbose:
+            self.model.setParam('OutputFlag', 0)
+        tt = time.time()
+
+
+
+
+        self.model.addConstr(self.x.sum(axis=1) <= 1 , name='select')
+
+        # self.model.addConstr(z[k, 0, 1] == 0)
+        for i in range(self.M_L):
+            for j in range(self.L):
+                self.model.addConstr(self.x[i, j] + self.y[i] <= 1, name='x + y' + str(i) + ' ' + str(j))
+                self.model.addConstr(self.w_var[i, j] <=
+                                     self.p[0, j] * self.w[0, i + self.L] / self.p[0, i + self.L],
+                                     name='w' + str(i) + ' ' + str(j))
+        indexes = np.argsort(-(self.p[0]/self.w[0])[self.L:])
+        for i in indexes:
+            up_to_i = indexes[:i]
+            before_i = up_to_i[:-1]
+            self.model.addConstr(self.c[0]*(1 - self.y[i]) + self.w_var[up_to_i, :].sum()
+                                 + (self.w[0, before_i + self.L] * self.y[before_i]).sum() <= self.w[0, i + self.L] ,
+                                 name='c residual ' + str(i))
+
+        self.model.addConstr(self.w_var.sum() + (self.w[0][self.L:] * self.y).sum() <= self.c[0], name='cap')
+
+        self.model.setObjective(self.w.sum(), gb.GRB.MAXIMIZE)
+
+        if verbose:
+            print('Constraints time', time.time() - tt)
+
+        # self.model.setParam('DualReductions', 0)
+        self.model.optimize()
+
+        self.time = time.time() - tt
+
+        if self.model.Status == GRB.INFEASIBLE:
+            self.model.computeIIS()
+            for c in self.model.getConstrs():
+                if c.IISConstr: print(f'\t{c.constrname}: {self.model.getRow(c)} {c.Sense} {c.RHS}')
+        if self.model.Status == GRB.UNBOUNDED:
+            print('unbounded')
+        self.obj = self.model.objVal
+
+        self.final_gap = self.model.MIPGap
+        return self.model.objVal, self.w.x
+
+

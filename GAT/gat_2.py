@@ -2,7 +2,6 @@ import os
 
 import torch
 import torch.nn.functional as F
-from torch import nn
 from torch_geometric.nn import GATv2Conv
 
 from NPP.Instance.gat_instance import create_batch
@@ -42,20 +41,6 @@ class EGAT2(torch.nn.Module):
         self.heads_init = heads
         self.dropout_init = dropout
         self.device = device
-
-        self.edge_layer = torch.nn.Sequential(
-            nn.Linear(edge_channels, hidden_channels),
-            nn.ReLU(),
-            nn.Linear(hidden_channels, edge_channels),
-            nn.ReLU()
-        )
-
-        self.last_leyer = torch.nn.Sequential(
-            nn.Linear(hidden_channels, hidden_channels),
-            nn.ReLU(),
-            nn.Linear(hidden_channels, out_channels),
-            nn.ReLU()
-        )
 
         self.best_gap = 0
 
@@ -99,8 +84,6 @@ class EGAT2(torch.nn.Module):
     def forward(self, batch, n_samples):
         x, edge_index, edge_attr = batch.x, batch.edge_index, batch.edge_attr
 
-        # edge_attr = self.edge_layer(edge_attr)
-
         x = self.conv1(x, edge_index, edge_attr)
         x = F.elu(x)
         x = F.dropout(x, p=self.dropout, training=self.training)
@@ -111,14 +94,12 @@ class EGAT2(torch.nn.Module):
 
         x = self.conv3(x, edge_index, edge_attr)
 
-        # x = self.last_leyer(x)
-
         # Split and transform
         mu_raw = x[:, 0]
         sigma_raw = x[:, 1]
 
         mu = 0.5 + 0.5 * torch.tanh(mu_raw)
-        sigma = 0.005 + torch.sigmoid(sigma_raw) * 0.03
+        sigma = 0.005 + torch.sigmoid(sigma_raw) * 0.1
         # mu = torch.sigmoid(mu_raw)  # Full [0,1] range, learnable center
         # sigma = 0.01 + torch.sigmoid(sigma_raw) * 0.49  # σ ∈ [0.01, 0.5] for exploration
 

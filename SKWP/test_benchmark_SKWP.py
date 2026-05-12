@@ -9,19 +9,21 @@ from SKWP.skwp_solver import SKWP
 
 EXTENDED = True
 
-file_name = 'SKWP/NET/test_skwp_20_50.pth'
+file_name = 'SKWP/NET/test_skwp_20_60__.pth'
 # df_exact = pd.read_csv('NPP/Results/exact_results.csv')
 
 agent = load_agent(file_name)
 device = agent.device
 
-BASELINE_ITERATIONS = 100
-POPULATION = 128
+agent.std_max = 0.1
+
+BASELINE_ITERATIONS = 1000
+POPULATION = 256
 
 TIME_LIMIT = 1800
 METHOD = 'g'
 
-CASES = [(10, 1), (15, 1), (20, 1), (30, 1), (60, 1), (90, 1), (10, 1), (90, 1)]
+CASES = [(30, 1), (60, 1), (90, 1), (180, 1), (360, 1), (720, 1)]
 # CASES = [ (90, 1), (10, 90), (90, 10)]
 # CASES = [(10, 90), (90, 10)]
 
@@ -47,18 +49,18 @@ for case in CASES:
         instance = SKWPGraph(paths, comm, extended=EXTENDED)
 
         ga = GA_SKWP(instance, pop_size=POPULATION, method=METHOD)
-        ga.run(BASELINE_ITERATIONS)
+        ga.run(BASELINE_ITERATIONS, verbose=False)
 
         ga_nn = GA_SKWP(instance, pop_size=POPULATION, method=METHOD)
         net_time = time.time()
         samples = agent.get_distribution(instance, POPULATION)
-
+        # print(samples.std(dim=0))
         _, net_best_sample = instance.eval_sample(samples, method=METHOD)
         net_time = time.time() - net_time
 
         mean_val = instance.eval(agent.get_mean(instance), method=METHOD)
 
-        ga_nn.run(BASELINE_ITERATIONS, init_population=instance.rescale_w(samples))
+        ga_nn.run(BASELINE_ITERATIONS, init_population=instance.rescale_w(samples), verbose=False)
         wins += ga.best_val <= ga_nn.best_val
         gaps += [ga_nn.best_val / ga.best_val] if ga.best_val > 0 else ([-1] if ga_nn.best_val > 0 else [-2])
         print(ga_nn.best_val / ga.best_val)
@@ -79,5 +81,3 @@ for case in CASES:
 
     print(paths, comm, wins / N_RUNS, np.mean(gaps), np.mean(exact_gaps))
     df.to_csv('SKWP/Results/test_.csv')
-
-
