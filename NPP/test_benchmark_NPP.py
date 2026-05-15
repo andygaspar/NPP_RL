@@ -7,7 +7,7 @@ from NPP.Solver.genetic_solver import Genetic
 from GAT.gat import load_agent
 from NPP.Solver.solver import NPPSolver
 
-file_name = 'NPP/NET/test_15_25.pth'
+file_name = 'NPP/NET/test_20_90.pth'
 
 df_exact = pd.read_csv('NPP/Results/exact_results.csv')
 

@@ -25,7 +25,7 @@ class SKWP:
 
         self.x = None
 
-    def solve(self, verbose=False, time_limit=None):
+    def solve(self, verbose=False, time_limit=None, xx=None, ww=None):
         if not verbose:
             self.model.setParam('OutputFlag', 0)
 
@@ -41,6 +41,10 @@ class SKWP:
         x = self.model.addMVar((self.inst.K, self.inst.M), vtype=GRB.BINARY)
         W = self.c
 
+        if xx is not None:
+            self.model.addConstr(x == xx)
+        if ww is not None:
+            self.model.addConstr(w == ww)
         # init sol
 
         e_max = 1 / d
@@ -90,6 +94,10 @@ class SKWP:
         self.final_gap = self.model.MIPGap
 
         return self.model.objVal,  w.x
+
+
+
+
 
 
 
