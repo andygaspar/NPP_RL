@@ -58,5 +58,16 @@ class GA_SKWP:
                 print(f"Gen {gen}: Best={self.best_val:.2f}, Avg={self.avg_fitness:.2f}")
         self.time = time.time() - self.time
         self.best_solution = self.population[indices[0]]
-
+#
+# w = np.concat([self.population[indices[0]].reshape(1, -1), self.instance.w[:, self.instance.L:]], axis=-1)
+# efficiency = self.instance.p[0] / w
+# indexes = np.argsort(-efficiency, axis=-1)
+# w_sorted = np.take_along_axis(w, indexes, axis=-1)
+# cs = np.cumsum(w_sorted, axis=-1)
+# sol = (cs < self.instance.c[:, np.newaxis])
+# reversed_indexes = np.argsort(indexes, axis=-1)  # This gives you the reverse mapping
+# # sol_original_order = np.take_along_axis(sol, reversed_indexes, axis=-1)
+# # new_sol = np.zeros_like(sol)
+# np.put_along_axis(sol, indexes, sol, axis=-1)
+# (w*sol)[:self.instance.L].sum(axis=-1)
 
