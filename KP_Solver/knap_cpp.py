@@ -20,7 +20,10 @@ class KnapCpp:
     def __init__(self, pb, batch_size):
         self.lib = ctypes.CDLL('KP_Solver/knap_bridge.so')
         self.batch_size = batch_size
-        self.p = np.ascontiguousarray(np.array([pb.p for _ in range(self.batch_size)], dtype=float))
+
+        adjusted_p = pb.p + pb.adjustment_p
+
+        self.p = np.ascontiguousarray(np.array([adjusted_p for _ in range(self.batch_size)], dtype=float))
         self.c = np.ascontiguousarray(np.stack((pb.c,) * batch_size))
         self.w = np.ascontiguousarray(np.array([pb.w for _ in range(self.batch_size)]))
         # p = np.ascontiguousarray(p, dtype=np.float64)
