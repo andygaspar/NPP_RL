@@ -167,7 +167,7 @@ class SKWP:
         self.obj = self.model.objVal
         self.final_gap = self.model.MIPGap
 
-        return self.model.objVal,  w.x
+        return self.model.objVal,  w.x, x.x
 
 
     def solve_k1(self, verbose=False, time_limit=None, xx=None, ww=None):
