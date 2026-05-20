@@ -6,7 +6,6 @@ from KP_Solver.knap_cpp import KnapCpp
 from SKWP.skwp_instance import SKWP_instance
 
 
-
 class GA_SKWP:
     def __init__(self, instance: SKWP_instance, pop_size, method='e'):
 
@@ -20,7 +19,6 @@ class GA_SKWP:
         self.best_solution = None
         self.avg_fitness = None
         self.time = None
-
         self.solver_fun = self.solver.solve_skwp if method == 'e' else self.solver.solve_skwp_greedy
 
     def run(self, iterations, init_population=None, verbose=False):
@@ -46,7 +44,9 @@ class GA_SKWP:
             mask = np.random.random((self.off_size, self.instance.L)) < 0.02
             delta = np.random.uniform(-percentage, percentage, size=self.population.shape[1])
             self.population[indices[self.pop_size:]] += delta * mask
-            self.population[indices[self.pop_size:]] = np.clip(self.population[indices[self.pop_size:]], 1e-6, self.instance.max_w)
+            self.population[indices[self.pop_size:]] = np.clip(self.population[indices[self.pop_size:]], 1e-9, self.instance.max_w)
+
+            self.population = np.round(self.population, 9)
 
             self.fitness[indices[self.pop_size:]], _ = self.solver_fun(self.population[indices[self.pop_size:]])
             indices = np.argsort(self.fitness)[::-1]

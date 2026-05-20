@@ -10,59 +10,26 @@ from SKWP.skwp_solver import SKWP
 EXTENDED = True
 model_name = 'test_skwp_20_50_2026-02-27 22:48:24'
 
-
-# ***************************************  DAAAAAAAAAAAAAAAAAAAAAAAAA CAMBIARE!! NEI TEST CON QUELLO SOPRA
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-model_name = 'test_skwp_20_50'
-
-
-
-
-
-
-
-
-
-
-
-
-# ***************************************
-
 file_name = 'SKWP/NET/' + model_name + '.pth'
-# df_exact = pd.read_csv('NPP/Results/exact_results.csv')
 
 agent = load_agent(file_name)
 device = agent.device
 
-BASELINE_ITERATIONS = 10 # ************************ ANCHE QUA
-POPULATION = 8   # ************************ ANCHE QUA
+BASELINE_ITERATIONS = 1000
+POPULATION = 128
 
 TIME_LIMIT = 1800
 METHOD = 'g'
 
-CASES = [(360, 360), (450, 450), (20, 450), (450, 20)]#[(10, 10), (15, 15), (20, 20), (56, 56), (90, 90), (180, 180), (360, 360), (450, 450), (20, 450), (450, 20)]
-SINGLE_COMMODITY = []#[(20, 1), (56, 1), (90, 1), (180, 1), (360, 1), (450, 1)]
+CASES = [(10, 10), (15, 15), (20, 20), (56, 56), (90, 90), (180, 180), (360, 360), (450, 450), (10, 360), (360, 10), (20, 450), (450, 20), (30, 720), (720, 30)]
+SINGLE_COMMODITY = [(20, 1), (56, 1), (90, 1), (180, 1), (360, 1), (450, 1), (720, 1), (900, 1)]
 CASES = SINGLE_COMMODITY + CASES
 
 
 SOLVER_CASES = CASES
 
-case_num = dict(zip(CASES, range(12, 12 + len(CASES))))
+case_num = dict(zip(CASES, range(len(CASES))))
+print(case_num)
 
 N_RUNS = 10
 
@@ -79,6 +46,7 @@ exact_columns = ['run', 'commodities', 'paths',
 df_exact = pd.DataFrame(columns=exact_columns)
 
 for case in CASES:
+    print(case)
     paths, comm = case
     wins, gaps, exact_gaps = 0, [], []
     for run in range(N_RUNS):
@@ -103,7 +71,7 @@ for case in CASES:
 
         if case in SOLVER_CASES:
             solver = SKWP(instance)
-            obj, sol = solver.solve(verbose=True, time_limit=TIME_LIMIT)
+            obj, sol = solver.solve(verbose=False, time_limit=TIME_LIMIT)
             solver_time, solver_obj, solver_final_gap, solver_status = (
                 solver.time, solver.obj, solver.final_gap, solver.model.status)
         else:
@@ -121,7 +89,7 @@ for case in CASES:
                                solver_time, case_num[case]]
 
     print(paths, comm, wins / N_RUNS, np.mean(gaps), np.mean(exact_gaps))
-    df.to_csv('SKWP/Results/' + model_name + '_2.csv')
-    df_exact.to_csv('SKWP/Results/' + 'exact_results_2.csv', index=False)
+    df.to_csv('SKWP/Results/' + model_name + '.csv')
+    df_exact.to_csv('SKWP/Results/' + 'exact_results.csv', index=False)
 
 
