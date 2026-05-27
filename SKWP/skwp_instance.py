@@ -9,6 +9,7 @@ class SKWP_instance:
         self.p = np.zeros((self.K, self.M))
         self.w = np.zeros((self.K, self.M))
         self.L = self.M // 2
+        self.F = self.M - self.L
 
         self.w = np.random.uniform(1, 100, size=(self.K, self.M))
         # self.c = self.w.sum(axis=1)//4
@@ -16,9 +17,9 @@ class SKWP_instance:
         self.c = np.random.uniform(self.w.sum(axis=1) * 0.1, self.w.sum(axis=1) * 0.9)
         self.p = np.random.uniform(1, 100, size=(self.K, self.M))
 
-        self.p = np.round(self.p, 9)
-        self.c = np.round(self.c, 9)
-        self.w = np.round(self.w, 9)
+        self.p = np.round(self.p, 3)
+        self.c = np.round(self.c, 3)
+        self.w = np.round(self.w, 3)
 
         idx_p = np.argsort(-self.p[:, : self.L], axis=-1)
         adj_p = np.argsort(idx_p, axis=-1)
@@ -53,13 +54,15 @@ class SKWP_instance:
         w_new = np.stack((w_new_,) * self.K, axis=1)
         w = self.w.copy()
         w[:, :self.L] = w_new
-        inv_efficiency = np.round(w / (self.p + self.adjustment_p), 9)
+        inv_efficiency = np.round(w / (self.p), 9) - self.adjustment_p
         # identical = np.any(np.diff(efficiency, axis=-1) == 0, axis=-1)
         indexes = np.argsort(inv_efficiency, axis=-1)
+        # print(indexes)
         w_sorted = np.take_along_axis(w, indexes, axis=-1)
         cs = np.cumsum(w_sorted, axis=-1)
-        sol = (cs < self.c[:, np.newaxis])
+        sol = (cs <= self.c[:, np.newaxis])
         np.put_along_axis(sol, indexes, sol, axis=-1)
+        print(sol, 'solution')
         val = (w * sol)[:, :self.L].sum(axis=-1).sum(axis=-1)
         return val, sol
 
