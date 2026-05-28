@@ -95,78 +95,6 @@ class SKWP:
         return self.model.objVal,  w.x
 
     def solve_k1(self, verbose=False, time_limit=None, xx=None, ww=None):
-        # if not verbose:
-        #     self.model.setParam('OutputFlag', 0)
-
-        if self.inst.K >= 360 and self.inst.M >= 360:
-            self.model.setParam('Threads', 4)
-            self.model.setParam('SoftMemLimit', 90)
-
-        tt = time.time()
-        w = self.model.addMVar((self.inst.M + 2, self.inst.M))
-        x = self.model.addMVar((self.inst.M + 2, self.inst.M), vtype=GRB.BINARY)
-        y = self.model.addMVar(self.inst.M + 2, vtype=GRB.BINARY)
-
-        idx_eff = np.argsort(-self.inst.p[0, self.inst.L:] / self.inst.w[0, self.inst.L:])
-
-        p_F = np.zeros(self.inst.M + 2)
-        w_F = np.zeros(self.inst.M + 2)
-
-        p_F[self.inst.L] = self.inst.p.max() + 1
-        p_F[self.inst.M + 1] = self.inst.p.min() / 2
-        sorted_p = self.inst.p[0, idx_eff + self.inst.L]
-        p_F[self.inst.L + 1:self.inst.M + 1] = sorted_p
-
-        w_F[self.inst.L] = self.inst.w.min() / 2
-        w_F[self.inst.M + 1] = self.inst.c.max() + 1
-        sorted_w = self.inst.w[0, idx_eff + self.inst.L]
-        w_F[self.inst.L + 1:self.inst.M + 1] = sorted_w
-
-        cap_adjusted = self.c[0] + self.inst.w.min() / 2
-
-        self.model.addConstr(x[:self.inst.L] == 0, name='x 0 ')
-        self.model.addConstr(x[self.inst.L:, self.inst.L + 2:] == 0, name='x 0 ')
-        self.model.addConstr(w[:self.inst.L] == 0, name='w 0 ')
-        self.model.addConstr(w[self.inst.L:,  self.inst.L + 2:] == 0, name='w 0 ')
-        self.model.addConstr(y[:self.inst.L] == 0, name='y 0 ')
-
-        self.model.addConstr(x.sum(axis=0) <= 1, name='x < 1 ')
-        # self.model.addConstr(x[6].sum() == 1, name='x < 1 ')
-
-        for i in range(self.inst.L, self.inst.M + 2):
-            for j in range(self.inst.L):
-                self.model.addConstr(x[i, j] + y[i] <= 1, name='x + y < 1 ' + str(i) + ' ' + str(j))
-
-                self.model.addConstr(w[i, j] <= (self.inst.p[0, j] * w_F[i]/p_F[i]) * x[i, j],
-                                     name='p * w / p ' + str(i) + ' ' + str(j))
-
-        for i in range(self.inst.L, self.inst.M + 2):
-            self.model.addConstr(cap_adjusted * (1 - y[i]) - w[self.inst.L:i, :].sum() - (w_F[self.inst.L:i - 1] * y[self.inst.L:i - 1]).sum() <=
-                                 w_F[i] - 1e-10, name='< w_F ' + str(i))
-
-        self.model.addConstr(w.sum() + (w_F[self.inst.L:] * y[self.inst.L:]).sum() <= cap_adjusted, name='x < 1 ')
-
-        constr_time = time.time() - tt
-
-        self.model.setObjective(w.sum(), gb.GRB.MAXIMIZE)
-        if time_limit is not None:
-            self.model.setParam('TimeLimit', time_limit - constr_time)
-
-        self.model.optimize()
-        self.time = time.time() - tt
-
-        if self.model.Status == GRB.INFEASIBLE or self.model.Status == 4:
-            self.model.computeIIS()
-            for c in self.model.getConstrs():
-                if c.IISConstr: print(f'\t{c.constrname}: {self.model.getRow(c)} {c.Sense} {c.RHS}')
-        if self.model.Status == GRB.UNBOUNDED:
-            print('unbounded')
-        self.obj = self.model.objVal
-        self.final_gap = self.model.MIPGap
-
-        return self.model.objVal,  w.x, x.x
-
-    def solve_k2(self, verbose=False, time_limit=None, xx=None, ww=None):
         if not verbose:
             self.model.setParam('OutputFlag', 0)
 
@@ -175,34 +103,34 @@ class SKWP:
             self.model.setParam('SoftMemLimit', 90)
 
         tt = time.time()
-        w = self.model.addMVar((self.inst.F, self.inst.L), name='w')
-        x = self.model.addMVar((self.inst.F, self.inst.L), vtype=GRB.BINARY, name='x')
-        y = self.model.addMVar(self.inst.F, vtype=GRB.BINARY, name='y')
+        w = self.model.addMVar((self.inst.F + 2, self.inst.L), name='w')
+        x = self.model.addMVar((self.inst.F + 2, self.inst.L), vtype=GRB.BINARY, name='x')
+        y = self.model.addMVar(self.inst.F + 2, vtype=GRB.BINARY, name='y')
 
         idx_eff = np.argsort(-self.inst.p[0, self.inst.L:] / self.inst.w[0, self.inst.L:])
 
-        # p_F = np.zeros(self.inst.F + 2)
-        # w_F = np.zeros(self.inst.F + 2)
-        #
-        # p_F[0] = self.inst.p.max() + 1
-        # p_F[-1] = self.inst.p.min() / 2
-        # sorted_p = self.inst.p[0, idx_eff + self.inst.L]
-        # p_F[1: -1] = sorted_p
-        #
-        # w_F[0] = self.inst.w.min() / 2
-        # w_F[-1] = self.inst.c.max() + 1
-        # sorted_w = self.inst.w[0, idx_eff + self.inst.L]
-        # w_F[1: -1] = sorted_w
+        p_F = np.zeros(self.inst.F + 2)
+        w_F = np.zeros(self.inst.F + 2)
 
-        p_F = self.inst.p[0, idx_eff + self.inst.L]
-        w_F = self.inst.w[0, idx_eff + self.inst.L]
+        p_F[0] = self.inst.p.max() + 1000000
+        p_F[-1] = 1 #self.inst.p.min() / 2
+        sorted_p = self.inst.p[0, idx_eff + self.inst.L]
+        p_F[1: -1] = sorted_p
+
+        w_F[0] = self.inst.w.min() / 2
+        w_F[-1] = self.inst.c[0]
+        sorted_w = self.inst.w[0, idx_eff + self.inst.L]
+        w_F[1: -1] = sorted_w
+
+        # p_F = self.inst.p[0, idx_eff + self.inst.L]
+        # w_F = self.inst.w[0, idx_eff + self.inst.L]
         # cap_adjusted = self.c[0] + self.inst.w.min() / 2
 
         self.model.addConstr(x.sum(axis=0) <= 1, name='x < 1 ')
         # self.model.addConstr(x[2].sum() >= 1, name='x forced ')
         # self.model.addConstr(y[1] >= 1, name='x forced ')
 
-        for i in range(self.inst.F):
+        for i in range(self.inst.F + 2):
             for j in range(self.inst.L):
                 self.model.addConstr(x[i, j] + y[i] <= 1, name='x + y < 1 ' + str(i) + ' ' + str(j))
 
@@ -212,7 +140,7 @@ class SKWP:
         self.model.addConstr(
             self.c[0] * (1 - y[0]) - w[0, :].sum() <= w_F[0] - 2e-9, name='< w_F 0')
 
-        for i in range(1, self.inst.F):
+        for i in range(1, self.inst.F + 2):
             self.model.addConstr(
                 self.c[0] * (1 - y[i]) - w[:i, :].sum() - (w_F[:i - 1] * y[:i - 1]).sum() <=
                 w_F[i] - 2e-9, name='< w_F --' + str(i))
@@ -237,9 +165,13 @@ class SKWP:
         self.obj = self.model.objVal
         self.final_gap = self.model.MIPGap
 
-        return self.model.objVal, w.x.sum(axis=0), x
+        sol = np.zeros_like(self.inst.p, dtype=bool)
+        sol[0, self.inst.L:] = y.x[np.argsort(idx_eff)]
+        sol[0, :self.inst.L] = x.x.sum(axis=0) >= 1
 
-    def solve_k3(self, verbose=False, time_limit=None, xx=None, ww=None):
+        return self.model.objVal, w.x.sum(axis=0), sol
+
+    def solve_k2(self, verbose=False, time_limit=None, xx=None, ww=None):
 
         if not verbose:
             self.model.setParam('OutputFlag', 0)
@@ -293,9 +225,13 @@ class SKWP:
             print('unbounded')
         self.obj = self.model.objVal
         self.final_gap = self.model.MIPGap
-        return self.model.objVal, w.x.sum(axis=0) + 2*self.c[0] * (1 - w.x.sum(axis=0).astype(bool))
 
-    def solve_k4(self, verbose=False, time_limit=None, xx=None, ww=None):
+        sol = np.zeros_like(self.inst.p, dtype=bool)
+        sol[0, self.inst.L:] = y.x[np.argsort(idx_eff)]
+        sol[0, :self.inst.L] = x.x.sum(axis=0) >= 1
+        return self.model.objVal, w.x.sum(axis=0) + 2*self.c[0] * (1 - w.x.sum(axis=0).astype(bool)), w.x, x.x, y.x
+
+    def solve_k3(self, verbose=False, time_limit=None, xx=None, ww=None):
 
         if not verbose:
             self.model.setParam('OutputFlag', 0)
