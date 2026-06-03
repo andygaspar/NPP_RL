@@ -201,32 +201,23 @@ extern "C" {
                     std::sort(indices.begin(), indices.end(),
                              [base_idx, p_i, w_i](int a, int b) {
                                  // Pre-compute to avoid repeating divisions
-                                 double eff_a = p_i[base_idx + a];
-                                 double w_a = w_i[base_idx + a] + 1e-12;
-                                 double eff_b = p_i[base_idx + b];
-                                 double w_b = w_i[base_idx + b] + 1e-12;
                                  // Compare a/b > c/d as a*d > c*b to avoid divisions
-                                 return eff_a * w_b > eff_b * w_a;
+                                 return p_i[base_idx + a] * (w_i[base_idx + b] + 1e-12) > p_i[base_idx + b] * (w_i[base_idx + a] + 1e-12);
                              });
                 }
 
                 // Reset selected using memset for speed
                 memset(selected.data(), 0, M * sizeof(uint8_t));
 
-                // Greedy selection with early exit
+                // Greedy selection
                 double cumulative = 0.0;
                 for (int s = 0; s < M; ++s) {
-                    int orig_idx = indices[s];
-                    double weight = w_i[base_idx + orig_idx];
-
                     // Early exit if even the smallest weight would exceed capacity
                     // (assuming weights are positive)
-                    if (cumulative + weight >= capacity) {
-                        break;
+                    if (cumulative + w_i[base_idx + indices[s]] <= capacity + 1e-8) {
+                        selected[indices[s]] = 1;
+                        cumulative += w_i[base_idx + indices[s]];
                     }
-
-                    selected[orig_idx] = 1;
-                    cumulative += weight;
                 }
 
                 // Sum first L selected items - unroll if L is small

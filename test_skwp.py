@@ -9,25 +9,31 @@ from SKWP.skwp_solver import SKWP
 
 pop_size = 128
 
-np.random.seed(0)
-pb = SKWP_instance(3, 1)
 
-ga = GA_SKWP(pb, pop_size, method='g')
-ga.run(10000, verbose=False)
+for i in range(4, 5):
+    np.random.seed(i)
+    pb = SKWP_instance(33, 1)
+
+    ga = GA_SKWP(pb, pop_size, method='g')
+    ga.run(1000, verbose=False)
 
 
-solver_3 = SKWP(pb)
-obj_3, w_3, sol_item = solver_3.solve_k1(verbose=False, time_limit=3600)
+    # sol, _ = pb.compute_obj(ga.best_solution.reshape(1, -1))
+    # ga.best_solution
 
-# obj_3, w_3 = solver_3.solve_k3(verbose=False, time_limit=3600)
+    solver_3 = SKWP(pb)
+    obj_3, w_3, sol_item = solver_3.solve_k1(verbose=False, time_limit=3600)
 
-sol, _ = pb.compute_obj(w_3.reshape(1, -1))
+    # obj_3, w_3 = solver_3.solve_k3(verbose=False, time_limit=3600)
 
-print()
-print(sol_item, 'kkk')
-ga_sol, _ = pb.compute_obj(ga.best_solution.reshape(1, -1))
-print(ga.best_val, solver_3.obj, ga_sol, sol, ga.best_val/solver_3.obj)
-print(ga.time, solver_3.time)
+    print(sol_item, 'kkk')
+    sol, _ = pb.compute_obj(w_3.reshape(1, -1))
+
+
+    # print()
+    ga_sol, _ = pb.compute_obj(ga.best_solution.reshape(1, -1))
+    print(i, ga.best_val, ga_sol, solver_3.obj,  sol) #, ga.best_val/solver_3.obj)
+    # print(ga.time, solver_3.time)
 # solver = SKWP(pb)
 # obj, w_exact = solver.solve(verbose=True, time_limit=3600)
 

@@ -124,12 +124,16 @@ class SKWP:
 
         # p_F = self.inst.p[0, idx_eff + self.inst.L]
         # w_F = self.inst.w[0, idx_eff + self.inst.L]
-        # cap_adjusted = self.c[0] + self.inst.w.min() / 2
+        cap_adjusted = self.c[0] + w_F[0]
 
         self.model.addConstr(x.sum(axis=0) <= 1, name='x < 1 ')
         # self.model.addConstr(x[2].sum() >= 1, name='x forced ')
         # self.model.addConstr(y[1] >= 1, name='x forced ')
 
+        # self.model.addConstr(x.sum() <= 1, name='x > 1 ')
+        # print('w_F')
+        # print(w_F)
+        # print(cap_adjusted)
         for i in range(self.inst.F + 2):
             for j in range(self.inst.L):
                 self.model.addConstr(x[i, j] + y[i] <= 1, name='x + y < 1 ' + str(i) + ' ' + str(j))
@@ -138,14 +142,14 @@ class SKWP:
                                      name='p * w / p ' + str(i) + ' ' + str(j))
 
         self.model.addConstr(
-            self.c[0] * (1 - y[0]) - w[0, :].sum() <= w_F[0] - 2e-9, name='< w_F 0')
+            cap_adjusted * (1 - y[0]) - w[0, :].sum() <= w_F[0] - 2e-9, name='< w_F 0')
 
         for i in range(1, self.inst.F + 2):
             self.model.addConstr(
-                self.c[0] * (1 - y[i]) - w[:i, :].sum() - (w_F[:i - 1] * y[:i - 1]).sum() <=
+                cap_adjusted * (1 - y[i]) - w[:i + 1, :].sum() - (w_F[:i] * y[:i]).sum() <=
                 w_F[i] - 2e-9, name='< w_F --' + str(i))
 
-        self.model.addConstr(w.sum() + (w_F * y).sum() <= self.c[0], name='cap ')
+        self.model.addConstr(w.sum() + (w_F * y).sum() <= cap_adjusted, name='cap ')
 
         constr_time = time.time() - tt
 
@@ -166,10 +170,21 @@ class SKWP:
         self.final_gap = self.model.MIPGap
 
         sol = np.zeros_like(self.inst.p, dtype=bool)
-        sol[0, self.inst.L:] = y.x[np.argsort(idx_eff)]
+        sol[0, self.inst.L:] = y.x[1: -1][np.argsort(idx_eff)]
         sol[0, :self.inst.L] = x.x.sum(axis=0) >= 1
 
-        return self.model.objVal, w.x.sum(axis=0), sol
+        w_sol = w.x.sum(axis=0)
+
+        w_copy = self.inst.w.copy()
+        w_copy[0, :self.inst.L] = w_sol
+
+        # print('cap', self.inst.c)
+        # print('w', w_copy)
+        # print('inef ', w_copy/self.inst.p)
+        # print('sol ', sol)
+        # print('used_cap', (w_copy * sol).sum())
+
+        return self.model.objVal, w_sol, sol
 
     def solve_k2(self, verbose=False, time_limit=None, xx=None, ww=None):
 

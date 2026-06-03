@@ -36,17 +36,51 @@ class SKWP_instance:
         w = self.w[:, self.L:]
         efficiency = p / w
         indexes = np.argsort(-efficiency, axis=-1)
-        efficiency_sorted = np.take_along_axis(efficiency, indexes, axis=-1)
-        w_sorted = np.take_along_axis(w, indexes, axis=-1)
-        cs = np.cumsum(w_sorted, axis=-1)
-        sol = (cs < self.c[:, np.newaxis])
+        # efficiency_sorted = np.take_along_axis(efficiency, indexes, axis=-1)
+        # w_sorted = np.take_along_axis(w, indexes, axis=-1)
+        # cs = np.cumsum(w_sorted, axis=-1)
+        # sol = (cs < self.c[:, np.newaxis])
+        #
+        # min_cap_left = (self.c - (w_sorted * sol).sum(axis=-1)).min()
+        #
+        # min_efficiency = efficiency_sorted[sol].min()
+        # max_w = self.p[:, :self.L].max(axis=0) / min_efficiency
+        # max_w[max_w < min_cap_left] = min_cap_left
+        # max_w[max_w > self.c.max()] = self.c.max()
+        sol = np.zeros_like(w, dtype=bool)
+        # Greedy per ogni utente (istanza K)
+        for k in range(self.K):
+            capacity_left = self.c[k]
+            for idx in indexes[k]:
+                if w[k, idx] <= capacity_left:  # Se l'item può entrare
+                    sol[k, idx] = True
+                    capacity_left -= w[k, idx]
+                # Altrimenti salta l'item e continua col prossimo
 
-        min_cap_left = (self.c - (w_sorted * sol).sum(axis=-1)).min()
+        # Calcola min_cap_left su tutti gli utenti
+        w_sorted = w[sol]  # Nota: questo non funziona bene con broadcasting
+        # Meglio calcolare per ogni utente:
+        min_cap_left = float('inf')
+        for k in range(self.K):
+            cap_left = self.c[k] - (w[k] * sol[k]).sum()
+            min_cap_left = min(min_cap_left, cap_left)
 
-        min_efficiency = efficiency_sorted[sol].min()
+        # Calcola min_efficiency tra gli item selezionati
+        min_efficiency = float('inf')
+        for k in range(self.K):
+            for idx in range(len(p[k])):
+                if sol[k, idx]:
+                    min_efficiency = min(min_efficiency, efficiency[k, idx])
+
+        # Se nessun item selezionato, usa un default
+        if min_efficiency == float('inf'):
+            min_efficiency = efficiency.max()  # o un valore di default
+
         max_w = self.p[:, :self.L].max(axis=0) / min_efficiency
         max_w[max_w < min_cap_left] = min_cap_left
         max_w[max_w > self.c.max()] = self.c.max()
+
+        return max_w
 
         return max_w
 
@@ -54,15 +88,30 @@ class SKWP_instance:
         w_new = np.stack((w_new_,) * self.K, axis=1)
         w = self.w.copy()
         w[:, :self.L] = w_new
+        w = w.round(9)
         inv_efficiency = np.round(w / (self.p), 9) - self.adjustment_p
         # identical = np.any(np.diff(efficiency, axis=-1) == 0, axis=-1)
         indexes = np.argsort(inv_efficiency, axis=-1)
         # print(indexes)
-        w_sorted = np.take_along_axis(w, indexes, axis=-1)
-        cs = np.cumsum(w_sorted, axis=-1)
-        sol = (cs <= self.c[:, np.newaxis])
-        np.put_along_axis(sol, indexes, sol, axis=-1)
-        print(sol, 'solution')
+        # w_sorted = np.take_along_axis(w, indexes, axis=-1)
+        # cs = np.cumsum(w_sorted, axis=-1)
+        # sol = (cs <= self.c[:, np.newaxis])
+        # np.put_along_axis(sol, indexes, sol, axis=-1)
+        # # print(sol, 'solution')
+        # val = (w * sol)[:, :self.L].sum(axis=-1).sum(axis=-1)
+        # Inizializza soluzione con zeri
+        sol = np.zeros_like(w, dtype=bool)
+
+        # Per ogni utente (istanza K)
+        for k in range(self.K):
+            capacity_left = self.c[k]
+            # Scorre gli item in ordine di efficienza
+            for idx in indexes[k]:
+                if w[k, idx] <= capacity_left + 1e-8:  # Se l'item può entrare
+                    sol[k, idx] = True
+                    capacity_left -= w[k, idx]
+                    capacity_left = capacity_left.round(9)
+                # Altrimenti salta l'item e continua con il prossimo
         val = (w * sol)[:, :self.L].sum(axis=-1).sum(axis=-1)
         return val, sol
 
