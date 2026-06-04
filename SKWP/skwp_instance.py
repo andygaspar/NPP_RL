@@ -24,7 +24,7 @@ class SKWP_instance:
         idx_p = np.argsort(-self.p[:, : self.L], axis=-1)
         adj_p = np.argsort(idx_p, axis=-1)
         self.adjustment_p = np.zeros_like(self.p)
-        self.adjustment_p[:, :self.L] += (adj_p + 1) * 1e-16  # self.max_w =  self.w[:, :self.L].max(axis=0)
+        self.adjustment_p[:, :self.L] += (adj_p + 1) * 1e-9  # self.max_w =  self.w[:, :self.L].max(axis=0)
 
         # self.max_w =  self.w[:, :self.L] .max(axis=0)
         self.max_w = self.compute_max()
@@ -82,14 +82,13 @@ class SKWP_instance:
 
         return max_w
 
-        return max_w
 
     def compute_obj(self, w_new_):
         w_new = np.stack((w_new_,) * self.K, axis=1)
         w = self.w.copy()
         w[:, :self.L] = w_new
         w = w.round(9)
-        inv_efficiency = np.round(w / (self.p), 9) - self.adjustment_p
+        inv_efficiency = np.round(w.round(9) / (self.p), 9) - self.adjustment_p
         # identical = np.any(np.diff(efficiency, axis=-1) == 0, axis=-1)
         indexes = np.argsort(inv_efficiency, axis=-1)
         # print(indexes)
@@ -112,6 +111,7 @@ class SKWP_instance:
                     capacity_left -= w[k, idx]
                     capacity_left = capacity_left.round(9)
                 # Altrimenti salta l'item e continua con il prossimo
+        # print(sol)
         val = (w * sol)[:, :self.L].sum(axis=-1).sum(axis=-1)
         return val, sol
 

@@ -10,7 +10,7 @@ from SKWP.skwp_solver import SKWP
 pop_size = 128
 
 
-for i in range(4, 5):
+for i in range(30):
     np.random.seed(i)
     pb = SKWP_instance(33, 1)
 
@@ -26,7 +26,7 @@ for i in range(4, 5):
 
     # obj_3, w_3 = solver_3.solve_k3(verbose=False, time_limit=3600)
 
-    print(sol_item, 'kkk')
+    # print(sol_item, 'kkk')
     sol, _ = pb.compute_obj(w_3.reshape(1, -1))
 
 

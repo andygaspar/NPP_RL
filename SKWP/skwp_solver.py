@@ -142,12 +142,12 @@ class SKWP:
                                      name='p * w / p ' + str(i) + ' ' + str(j))
 
         self.model.addConstr(
-            cap_adjusted * (1 - y[0]) - w[0, :].sum() <= w_F[0] - 2e-9, name='< w_F 0')
+            cap_adjusted * (1 - y[0]) - w[0, :].sum() <= w_F[0] - 1e-8, name='< w_F 0')
 
         for i in range(1, self.inst.F + 2):
             self.model.addConstr(
                 cap_adjusted * (1 - y[i]) - w[:i + 1, :].sum() - (w_F[:i] * y[:i]).sum() <=
-                w_F[i] - 2e-9, name='< w_F --' + str(i))
+                w_F[i] - 1e-7, name='< w_F --' + str(i))
 
         self.model.addConstr(w.sum() + (w_F * y).sum() <= cap_adjusted, name='cap ')
 
