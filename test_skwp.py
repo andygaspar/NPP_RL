@@ -9,10 +9,9 @@ from SKWP.skwp_solver import SKWP
 
 pop_size = 128
 
-
 for i in range(2, 3):
     np.random.seed(i)
-    pb = SKWP_instance(3, 2)
+    pb = SKWP_instance(3, 1)
 
     ga = GA_SKWP(pb, pop_size, method='g')
     ga.run(1000, verbose=False)
@@ -22,6 +21,7 @@ for i in range(2, 3):
     # ga.best_solution
 
     solver_3 = SKWP(pb)
+    # obj_3, w_3, sol_item = solver_3.solve_all(verbose=False, time_limit=3600, w_init = ga.best_solution)
     obj_3, w_3, sol_item = solver_3.solve_all(verbose=False, time_limit=3600)
 
 

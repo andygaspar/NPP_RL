@@ -183,7 +183,7 @@ class SKWP:
 
         return self.model.objVal, w_sol, sol
 
-    def solve_all(self, verbose=False, time_limit=None):
+    def solve_all(self, verbose=False, time_limit=None, w_init= None):
         if not verbose:
             self.model.setParam('OutputFlag', 0)
 
@@ -193,7 +193,7 @@ class SKWP:
 
         tt = time.time()
         w = self.model.addMVar((self.L,), name='w')
-        w_k = self.model.addMVar((self.K, self.L, self.M), name='w_k')
+        w_k = self.model.addMVar((self.K, self.M, self.M), name='w_k')
         w_k_in = self.model.addMVar((self.K, self.M), name='w_k_in')
         w_leader_in = self.model.addMVar((self.K, self.M), name='w_leader_in')
         x = self.model.addMVar((self.K, self.M, self.M), vtype=GRB.BINARY, name='x')
@@ -201,51 +201,34 @@ class SKWP:
 
         self.model.addConstr(x.sum(axis=-1) == 1, name='xi = 1 ')
         self.model.addConstr(x.sum(axis=1) == 1, name='xj = 1 ')
+
+        if w_init is not None:
+            self.model.addConstr(w == w_init, name='w = 1 ')
+
+        BigM = 10_000
         for k in range(self.K):
 
-            for j in range(self.M - 1):
+            for j in range(self.M):
 
-                self.model.addConstr(
-                    (w_k[k, :self.L, j] / self.p[k, :self.L]).sum() + (x[k, :self.L, j] * self.w[k, self.L:] / self.p[k, self.L:]).sum()
-                    <= (w_k[k, :self.L, j + 1] / self.p[k, :self.L]).sum()
-                    + (x[k, :self.L, j + 1] * self.w[k, self.L:] / self.p[k, self.L:]).sum(),
-                    name='ineff order ' + str(k) + ' ' + str(j))
+                if j < self.M - 1:
+                    self.model.addConstr(
+                        (w_k[k, :, j] / self.p[k, :]).sum() <= (w_k[k, :, j + 1] / self.p[k, :]).sum(),
+                        name='ineff order ' + str(k) + ' ' + str(j))
 
                 for i in range(self.L):
                     self.model.addConstr(
-                        w_k[k, i, j] <= x[k, i, j] * self.c[k]
+                        w_k[k, i, j] <= x[k, i, j] * BigM
                     )
 
-            self.model.addConstr(
-                w_k[k, :self.L, 0].sum() + (self.w[k, self.L:] * x[k, self.L:, 0]).sum() >= self.c[k] - y[k, 0] * self.c[k],
-                name='force cap ' + str(k) + ' ' + str(0)
-            )
+                for i in range(self.L, self.M):
+                    self.model.addConstr(
+                        w_k[k, i, j] == x[k, i, j] * self.w[k, i]
+                    )
 
-            self.model.addConstr(
-                w_k[k, :self.L, 0].sum() + (self.w[k, self.L:] * x[k, self.L:, 0]).sum() <= w_k_in[k, 0] + (1 - y[k, 0]) * self.c[k],
-                name = 'force cap * 1 ' + str(k) + ' ' + str(0)
-            )
-
-            self.model.addConstr(
-                w_k_in[k, 0] <= y[k, 0] * self.c[k],
-                name='force cap * 2 ' + str(k) + ' ' + str(0)
-            )
-
-            self.model.addConstr(
-                w_k[k, :self.L, 0].sum() + (self.w[k, self.L:] * x[k, self.L:, 0]).sum() >= w_k_in[k, 0]
-            )
-
-            self.model.addConstr(
-                w_leader_in[k, 0] <= w_k[k, :self.L, 0].sum()
-            )
-
-            self.model.addConstr(
-                w_leader_in[k, 0] <= y[k, 0] * self.c[k]
-            )
-
-            for j in range(1, self.M):
+            for j in range(self.M):
+                ##### SE CI SONO OGGETTI CON PESO SUPERIORE ALLA CAPACITA' USARE C[K] COME UPPER NON E' SUFFICENTE
                 self.model.addConstr(
-                    w_k[k, :self.L, j].sum() + (self.w[k, self.L:] * x[k, self.L:, j]).sum() <= w_k_in[k, j] + (1 - y[k, j]) * self.c[k],
+                    w_k[k, :, j].sum() <= w_k_in[k, j] + (1 - y[k, j]) * BigM, #self.c[k],
                     name='force w if y ' + str(k) + ' ' + str(j)
                 )
 
@@ -254,12 +237,14 @@ class SKWP:
                 )
 
                 self.model.addConstr(
-                    w_k[k, :self.L, j].sum() + (self.w[k, self.L:] * x[k, self.L:, j]).sum() >= w_k_in[k, j]
+                    w_k[k, :, j].sum() >= w_k_in[k, j]
                 )
 
                 self.model.addConstr(
                     w_k_in[k, :j + 1].sum() >= self.c[k] - y[k, j] * self.c[k]
                 )
+
+            for j in range(self.M):
 
                 self.model.addConstr(
                     w_leader_in[k, j] <= w_k[k, :self.L, j].sum()
@@ -268,14 +253,11 @@ class SKWP:
                 self.model.addConstr(
                     w_leader_in[k, j] <= y[k, j] * self.c[k]
                 )
+            ##### CREA PROBLEMI, MA MI SEMBRA CHE SENZA QUESTO NON STIAMO FORZANDO LE Y AD ESSERE 0 QUANDO L'OGGETTO CORRISPONDENTE ECCEDE LA CAPACITA' (RESIDUA)
+            ##### MA SOLO AD ESSERE 1 QUANDO STA SOTTO LA CAPACITA (RESIUDA)
+            #self.model.addConstr(w_k_in.sum(axis=-1) <= self.c)
+            self.model.addConstr(w == w_k[k, :self.L].sum(axis=-1), name='w == w_k' + str(k) + ' ')
 
-
-
-            self.model.addConstr(w == w_k[k].sum(axis=-1), name='w <= w_k' + str(k) + ' ')
-            # self.model.addConstr(w <= w_k[k].sum(axis=0) + (1 - x[k].sum(axis=0)) * self.inst.c[k], name='w <= w_k' + str(k) + ' ')
-            # self.model.addConstr(w >= w_k[k].sum(axis=0) - (1 - x[k].sum(axis=0)) * self.inst.c[k], name='w >= w_k' + str(k) + ' ')
-
-        # self.model.addConstr(w <= x.sum(axis=0).sum(axis=0) * self.inst.c.max())
 
         constr_time = time.time() - tt
 
@@ -302,8 +284,9 @@ class SKWP:
             w_copy[:, :self.inst.L] = w_sol
             idx_eff = np.argsort(-self.inst.p[k, self.inst.L:] / self.inst.w[k, self.inst.L:])
 
-            sol[k, self.inst.L:] = y.x[k, 1: -1][np.argsort(idx_eff)]
-            sol[k, :self.inst.L] = x.x[k].sum(axis=0) >= 1
+            sol = y.x == 1
+            #sol[k, self.inst.L:] = y.x[k, 1: -1][np.argsort(idx_eff)]
+            #sol[k, :self.inst.L] = x.x[k].sum(axis=0) >= 1
 
         print('cap', self.inst.c)
         print('w', w_copy)
