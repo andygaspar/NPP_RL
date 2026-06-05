@@ -111,7 +111,7 @@ class SKWP_instance:
                     capacity_left -= w[k, idx]
                     capacity_left = capacity_left.round(9)
                 # Altrimenti salta l'item e continua con il prossimo
-        # print(sol)
+        print(sol)
         val = (w * sol)[:, :self.L].sum(axis=-1).sum(axis=-1)
         return val, sol
 

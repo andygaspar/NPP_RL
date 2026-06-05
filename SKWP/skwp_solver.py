@@ -14,11 +14,16 @@ class SKWP:
     def __init__(self, problem: SKWP_instance):
 
         self.model = gb.Model("SKWP")
-
+        self.model.setParam('FeasibilityTol', 1e-9)
+        self.model.setParam('IntFeasTol', 1e-9)
+        self.model.setParam('NumericFocus', 3)  # Alta precisione numerica
         self.inst = problem
         self.p = problem.p
         self.w = problem.w
         self.c = problem.c
+        self.M = problem.M
+        self.K = problem.K
+        self.L = problem.L
         self.obj = None
         self.time = None
         self.final_gap = None
@@ -92,7 +97,7 @@ class SKWP:
         self.obj = self.model.objVal
 
         self.final_gap = self.model.MIPGap
-        return self.model.objVal,  w.x
+        return self.model.objVal, w.x
 
     def solve_k1(self, verbose=False, time_limit=None, xx=None, ww=None):
         if not verbose:
@@ -113,7 +118,7 @@ class SKWP:
         w_F = np.zeros(self.inst.F + 2)
 
         p_F[0] = self.inst.p.max() + 1000000
-        p_F[-1] = 1 #self.inst.p.min() / 2
+        p_F[-1] = 1  #self.inst.p.min() / 2
         sorted_p = self.inst.p[0, idx_eff + self.inst.L]
         p_F[1: -1] = sorted_p
 
@@ -122,18 +127,10 @@ class SKWP:
         sorted_w = self.inst.w[0, idx_eff + self.inst.L]
         w_F[1: -1] = sorted_w
 
-        # p_F = self.inst.p[0, idx_eff + self.inst.L]
-        # w_F = self.inst.w[0, idx_eff + self.inst.L]
         cap_adjusted = self.c[0] + w_F[0]
 
         self.model.addConstr(x.sum(axis=0) <= 1, name='x < 1 ')
-        # self.model.addConstr(x[2].sum() >= 1, name='x forced ')
-        # self.model.addConstr(y[1] >= 1, name='x forced ')
 
-        # self.model.addConstr(x.sum() <= 1, name='x > 1 ')
-        # print('w_F')
-        # print(w_F)
-        # print(cap_adjusted)
         for i in range(self.inst.F + 2):
             for j in range(self.inst.L):
                 self.model.addConstr(x[i, j] + y[i] <= 1, name='x + y < 1 ' + str(i) + ' ' + str(j))
@@ -186,8 +183,7 @@ class SKWP:
 
         return self.model.objVal, w_sol, sol
 
-    def solve_k2(self, verbose=False, time_limit=None, xx=None, ww=None):
-
+    def solve_all(self, verbose=False, time_limit=None):
         if not verbose:
             self.model.setParam('OutputFlag', 0)
 
@@ -196,36 +192,94 @@ class SKWP:
             self.model.setParam('SoftMemLimit', 90)
 
         tt = time.time()
-        w = self.model.addMVar((self.inst.F, self.inst.L), name='w')
-        x = self.model.addMVar((self.inst.F, self.inst.L), vtype=GRB.BINARY, name='x')
-        y = self.model.addMVar(self.inst.F, vtype=GRB.BINARY, name='y')
+        w = self.model.addMVar((self.L,), name='w')
+        w_k = self.model.addMVar((self.K, self.L, self.M), name='w_k')
+        w_k_in = self.model.addMVar((self.K, self.M), name='w_k_in')
+        w_leader_in = self.model.addMVar((self.K, self.M), name='w_leader_in')
+        x = self.model.addMVar((self.K, self.M, self.M), vtype=GRB.BINARY, name='x')
+        y = self.model.addMVar((self.K, self.M), vtype=GRB.BINARY, name='y')
 
+        self.model.addConstr(x.sum(axis=-1) == 1, name='xi = 1 ')
+        self.model.addConstr(x.sum(axis=1) == 1, name='xj = 1 ')
+        for k in range(self.K):
 
-        idx_eff = np.argsort(-self.inst.p[0, self.inst.L:] / self.inst.w[0, self.inst.L:])
+            for j in range(self.M - 1):
 
-        p_F = self.inst.p[0, idx_eff + self.inst.L]
-        w_F = self.inst.w[0, idx_eff + self.inst.L]
-        # cap_adjusted = self.c[0] + self.inst.w.min() / 2
-
-        self.model.addConstr(x.sum(axis=0) <= 1, name='x < 1 ')
-        # self.model.addConstr(x[2].sum() >= 1, name='x forced ')
-        # self.model.addConstr(y[1] >= 1, name='x forced ')
-
-        for i in range(self.inst.F - 1):
-            self.model.addConstr(y[i] >= y[i + 1], name='y order ' + str(i))
-            self.model.addConstr(y[i] * self.inst.L >= x[i + 1, :].sum(), name='y order ' + str(i))
-
-        for i in range(self.inst.F):
-            for j in range(self.inst.L):
                 self.model.addConstr(
-                    w[i, j] <= (self.inst.p[0, j] * w_F[i] / p_F[i]) * x[i, j],
-                    name='p * w / p ' + str(i) + ' ' + str(j))
+                    (w_k[k, :self.L, j] / self.p[k, :self.L]).sum() + (x[k, :self.L, j] * self.w[k, self.L:] / self.p[k, self.L:]).sum()
+                    <= (w_k[k, :self.L, j + 1] / self.p[k, :self.L]).sum()
+                    + (x[k, :self.L, j + 1] * self.w[k, self.L:] / self.p[k, self.L:]).sum(),
+                    name='ineff order ' + str(k) + ' ' + str(j))
 
-        self.model.addConstr(w.sum() + (w_F * y).sum() <= self.c[0], name='cap ')
+                for i in range(self.L):
+                    self.model.addConstr(
+                        w_k[k, i, j] <= x[k, i, j] * self.c[k]
+                    )
+
+            self.model.addConstr(
+                w_k[k, :self.L, 0].sum() + (self.w[k, self.L:] * x[k, self.L:, 0]).sum() >= self.c[k] - y[k, 0] * self.c[k],
+                name='force cap ' + str(k) + ' ' + str(0)
+            )
+
+            self.model.addConstr(
+                w_k[k, :self.L, 0].sum() + (self.w[k, self.L:] * x[k, self.L:, 0]).sum() <= w_k_in[k, 0] + (1 - y[k, 0]) * self.c[k],
+                name = 'force cap * 1 ' + str(k) + ' ' + str(0)
+            )
+
+            self.model.addConstr(
+                w_k_in[k, 0] <= y[k, 0] * self.c[k],
+                name='force cap * 2 ' + str(k) + ' ' + str(0)
+            )
+
+            self.model.addConstr(
+                w_k[k, :self.L, 0].sum() + (self.w[k, self.L:] * x[k, self.L:, 0]).sum() >= w_k_in[k, 0]
+            )
+
+            self.model.addConstr(
+                w_leader_in[k, 0] <= w_k[k, :self.L, 0].sum()
+            )
+
+            self.model.addConstr(
+                w_leader_in[k, 0] <= y[k, 0] * self.c[k]
+            )
+
+            for j in range(1, self.M):
+                self.model.addConstr(
+                    w_k[k, :self.L, j].sum() + (self.w[k, self.L:] * x[k, self.L:, j]).sum() <= w_k_in[k, j] + (1 - y[k, j]) * self.c[k],
+                    name='force w if y ' + str(k) + ' ' + str(j)
+                )
+
+                self.model.addConstr(
+                    w_k_in[k, j] <= y[k, j] * self.c[k]
+                )
+
+                self.model.addConstr(
+                    w_k[k, :self.L, j].sum() + (self.w[k, self.L:] * x[k, self.L:, j]).sum() >= w_k_in[k, j]
+                )
+
+                self.model.addConstr(
+                    w_k_in[k, :j + 1].sum() >= self.c[k] - y[k, j] * self.c[k]
+                )
+
+                self.model.addConstr(
+                    w_leader_in[k, j] <= w_k[k, :self.L, j].sum()
+                )
+
+                self.model.addConstr(
+                    w_leader_in[k, j] <= y[k, j] * self.c[k]
+                )
+
+
+
+            self.model.addConstr(w == w_k[k].sum(axis=-1), name='w <= w_k' + str(k) + ' ')
+            # self.model.addConstr(w <= w_k[k].sum(axis=0) + (1 - x[k].sum(axis=0)) * self.inst.c[k], name='w <= w_k' + str(k) + ' ')
+            # self.model.addConstr(w >= w_k[k].sum(axis=0) - (1 - x[k].sum(axis=0)) * self.inst.c[k], name='w >= w_k' + str(k) + ' ')
+
+        # self.model.addConstr(w <= x.sum(axis=0).sum(axis=0) * self.inst.c.max())
 
         constr_time = time.time() - tt
 
-        self.model.setObjective(w.sum(), gb.GRB.MAXIMIZE)
+        self.model.setObjective(w_leader_in.sum(), gb.GRB.MAXIMIZE)
         if time_limit is not None:
             self.model.setParam('TimeLimit', time_limit - constr_time)
 
@@ -242,185 +296,19 @@ class SKWP:
         self.final_gap = self.model.MIPGap
 
         sol = np.zeros_like(self.inst.p, dtype=bool)
-        sol[0, self.inst.L:] = y.x[np.argsort(idx_eff)]
-        sol[0, :self.inst.L] = x.x.sum(axis=0) >= 1
-        return self.model.objVal, w.x.sum(axis=0) + 2*self.c[0] * (1 - w.x.sum(axis=0).astype(bool)), w.x, x.x, y.x
-
-    def solve_k3(self, verbose=False, time_limit=None, xx=None, ww=None):
-
-        if not verbose:
-            self.model.setParam('OutputFlag', 0)
-
-        if self.inst.K >= 360 and self.inst.M >= 360:
-            self.model.setParam('Threads', 4)
-            self.model.setParam('SoftMemLimit', 90)
-
-        tt = time.time()
-        w = self.model.addMVar((self.inst.L), name='w')
-        w_k = self.model.addMVar((self.inst.K, self.inst.F + 1, self.inst.L), name='w')
-        x = self.model.addMVar((self.inst.K, self.inst.F + 1, self.inst.L), vtype=GRB.BINARY, name='x')
-        y = self.model.addMVar((self.inst.K, self.inst.F), vtype=GRB.BINARY, name='y')
-        # if ww is not None:
-        #     self.model.addConstr(w == ww, name='w  ww 0')
-        # cap_adjusted = self.c[0] + self.inst.w.min() / 2
-        # for j in range(self.inst.L):
-        #     self.model.addConstr(x[:, :, j].sum() * self.inst.c.max() >= w[j])
-
-        self.model.addConstr(x[0, :, 1].sum() == 1)
-
+        w_copy = self.inst.w.copy()
+        w_sol = w.x
         for k in range(self.inst.K):
-
-            for j in range(self.inst.L):
-                for jj in range(j+1, self.inst.L):
-                    self.model.addConstr(w[j]/self.inst.p[k, j] >= (w_k[k, :, jj].sum(axis=0)) / self.inst.p[k, jj]
-                                         - self.c[k]*x[k,:, jj].sum())
-                    self.model.addConstr(w[jj] / self.inst.p[k, jj] >= (w_k[k, :, j].sum(axis=0)) / self.inst.p[k, j]
-                                         - self.c[k] * x[k, :, j].sum())
-
-            self.model.addConstr(w_k[k].sum(axis=0) >= w - (1 - x[k].sum(axis=0)) * self.inst.c.max(), name='w wk > ' + str(k))
-            self.model.addConstr(w_k[k].sum(axis=0) <= w + (1 - x[k].sum(axis=0)) * self.inst.c.max(), name='w wk < ' + str(k))
-
+            w_copy[:, :self.inst.L] = w_sol
             idx_eff = np.argsort(-self.inst.p[k, self.inst.L:] / self.inst.w[k, self.inst.L:])
-            p_F = self.inst.p[k, idx_eff + self.inst.L]
-            w_F = self.inst.w[k, idx_eff + self.inst.L]
 
-            self.model.addConstr(x[k].sum(axis=0) <= 1, name='x < 1 ' + str(k))
-            # self.model.addConstr(x[2].sum() >= 1, name='x forced ')
-            # self.model.addConstr(y[1] >= 1, name='x forced ')
+            sol[k, self.inst.L:] = y.x[k, 1: -1][np.argsort(idx_eff)]
+            sol[k, :self.inst.L] = x.x[k].sum(axis=0) >= 1
 
-            for i in range(self.inst.F - 1):
-                self.model.addConstr(y[k, i] >= y[k, i + 1],
-                                     name='y order ' + str(k) + ' ' + str(i))
+        print('cap', self.inst.c)
+        print('w', w_copy)
+        print('inef ', w_copy / self.inst.p)
+        print('sol ', sol)
+        print('used_cap', (w_copy * sol).sum(axis=1))
 
-            for i in range(self.inst.F):
-                self.model.addConstr(y[k, i] * self.inst.L >= x[k, i + 1, :].sum(),
-                                     name='y order ' + str(k) + ' ' + str(i))
-
-            for j in range(self.inst.L):
-                for i in range(self.inst.F):
-                    self.model.addConstr(
-                        w_k[k, i, j] <= (self.inst.p[k, j] * w_F[i] / p_F[i]) * x[k, i, j],
-                        name='p * w / p ' + str(k) + ' ' + str(i) + ' ' + str(j))
-
-                self.model.addConstr(
-                    w_k[k, -1, j] <= self.c[k] * x[k, -1, j],
-                    name='p * w / p ' + str(k) + ' ' + str(-1) + ' ' + str(j))
-                self.model.addConstr(
-                    w_k[k, -1, j] >= (self.inst.p[k, j] * w_F[-1] / p_F[-1]) * x[k, -1, j],
-                    name='p * w / p ' + str(k) + ' ' + str(-1) + ' ' + str(j))
-
-            self.model.addConstr(w_k[k].sum() + (w_F * y[k]).sum() <= self.c[k], name='cap ' + str(k) + ' ')
-
-        constr_time = time.time() - tt
-
-        self.model.setObjective(w_k.sum(), gb.GRB.MAXIMIZE)
-        if time_limit is not None:
-            self.model.setParam('TimeLimit', time_limit - constr_time)
-
-        self.model.optimize()
-        self.time = time.time() - tt
-
-        if self.model.Status == GRB.INFEASIBLE or self.model.Status == 4:
-            self.model.computeIIS()
-            for c in self.model.getConstrs():
-                if c.IISConstr: print(f'\t{c.constrname}: {self.model.getRow(c)} {c.Sense} {c.RHS}')
-        if self.model.Status == GRB.UNBOUNDED:
-            print('unbounded')
-        self.obj = self.model.objVal
-        self.final_gap = self.model.MIPGap
-        return self.model.objVal, w.x, w_k.x, x.x, y.x
-
-
-#
-#
-# class SKWP_greedy:
-#
-#     def __init__(self, problem: SKWP_instance):
-#
-#         self.model = gb.Model("SKWP")
-#
-#         self.inst = problem
-#         self.p = problem.p
-#         self.w = problem.w
-#         self.c = problem.c
-#         self.obj = None
-#         self.time = None
-#         self.final_gap = None
-#
-#         self.x = self.model.addMVar((self.inst.K, self.inst.M), vtype=GRB.BINARY, name='x')
-#
-#
-#     def solve(self, verbose=False, init_solution=None, x_solution=None):
-#         if not verbose:
-#             self.model.setParam('OutputFlag', 0)
-#         tt = time.time()
-#
-#         w = self.model.addMVar(self.inst.L, name='w')
-#         z = self.model.addMVar((self.inst.K, self.inst.M, self.inst.M), vtype=GRB.BINARY, name='z')
-#         if init_solution is not None:
-#             self.model.addConstr(w == init_solution, name='init_solution')
-#             self.model.addConstr(self.x == x_solution, name='x_init_solution')
-#             pass
-#         t = self.model.addMVar((self.inst.K, self.inst.L), name='t')
-#         # self.model.addConstr(z == 1 - self.x)
-#         for k in range(self.inst.K):
-#
-#             self.model.addConstr(t[k].sum() + (self.w[k, self.inst.L:] * self.x[k, self.inst.L:]).sum()
-#                                  <= self.c[k], name='cap' + str(k))
-#
-#             # self.model.addConstr(z[k, 0, 1] == 0)
-#             for i in range(self.inst.M):
-#                 for j in range(self.inst.M):
-#                     self.model.addConstr(z[k, i, j] >= self.x[k, i] - self.x[k, j], name='z1' + str(k) + ' ' + str(i) + ' ' + str(j))
-#                     self.model.addConstr(z[k, i, j] <= 1 - self.x[k, j], name='z2' + str(k) + ' ' + str(i) + ' ' + str(j))
-#
-#             for i in range(self.inst.L):
-#                 self.model.addConstr(t[k, i] <= self.x[k, i] * self.inst.max_w[i], name='t < x ' + str(k) + ' ' + str(i))
-#                 self.model.addConstr(w[i] - t[k, i] <= (1 - self.x[k, i]) * self.inst.max_w[i], name='w - t >  ' + str(k) + ' ' + str(i))
-#                 self.model.addConstr(t[k, i] <= w[i], name='t > w ' + str(k) + ' ' + str(i))
-#
-#                 for j in range(self.inst.L):
-#                     self.model.addConstr(t[k, i] / self.p[k, i] <=
-#                                          w[j] / self.p[k, j] + (1 - z[k, i, j]) * self.inst.max_e_inv[k],
-#                                          name='eff t < t ' + str(k) + ' ' + str(i) + ' ' + str(j))
-#
-#                 for j in range(self.inst.L, self.inst.M):
-#                     self.model.addConstr(t[k, i] / self.p[k, i] <=
-#                                          self.w[k, j] / self.p[k, j] + (1 - z[k, i, j]) * self.inst.max_e_inv[k],
-#                                          name='eff t < x ' + str(k) + ' ' + str(i) + ' ' + str(j))
-#
-#             for i in range(self.inst.L, self.inst.M):
-#                 for j in range(self.inst.L):
-#                     self.model.addConstr(self.w[k, i] * self.x[k, i] / self.p[k, i]
-#                                          <= w[j] / self.p[k, j] + (1 - z[k, i, j]) * self.inst.max_e_inv[k],
-#                                          name='eff x < t ' + str(k) + ' ' + str(i) + ' ' + str(j))
-#
-#                 for j in range(self.inst.L, self.inst.M):
-#                     self.model.addConstr(self.w[k, i] * self.x[k, i] / self.p[k, i]
-#                                          <= self.w[k, j] / self.p[k, j] + (1 - z[k, i, j]) * self.inst.max_e_inv[k],
-#                                          name='eff x < x  ' + str(k) + ' ' + str(i) + ' ' + str(j))
-#
-#         self.model.setObjective(t.sum(), gb.GRB.MAXIMIZE)
-#
-#         if verbose:
-#             print('Constraints time', time.time() - tt)
-#
-#         # self.model.setParam('DualReductions', 0)
-#         self.model.optimize()
-#
-#
-#
-#         self.time = time.time() - tt
-#
-#         if self.model.Status == GRB.INFEASIBLE:
-#             self.model.computeIIS()
-#             for c in self.model.getConstrs():
-#                 if c.IISConstr: print(f'\t{c.constrname}: {self.model.getRow(c)} {c.Sense} {c.RHS}')
-#         if self.model.Status == GRB.UNBOUNDED:
-#             print('unbounded')
-#         self.obj = self.model.objVal
-#
-#         self.final_gap = self.model.MIPGap
-#         return self.model.objVal,  w.x
-#
-#
+        return self.model.objVal, w_sol, sol
