@@ -7,15 +7,15 @@ from SKWP.GA_SKWP import GA_SKWP
 from SKWP.skwp_instance import SKWP_instance
 from SKWP.skwp_solver import SKWP
 
-pop_size = 128
+pop_size = 10
 
-for i in range(2, 3):
+for i in range(30):
     np.random.seed(i)
-    pb = SKWP_instance(3, 1)
+    pb = SKWP_instance(5, 4)
 
     ga = GA_SKWP(pb, pop_size, method='g')
-    ga.run(1000, verbose=False)
-
+    ga.run(10, verbose=False)
+    # print('ga sol', ga.best_solution)
 
     # sol, _ = pb.compute_obj(ga.best_solution.reshape(1, -1))
     # ga.best_solution

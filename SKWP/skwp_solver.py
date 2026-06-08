@@ -14,9 +14,7 @@ class SKWP:
     def __init__(self, problem: SKWP_instance):
 
         self.model = gb.Model("SKWP")
-        self.model.setParam('FeasibilityTol', 1e-9)
-        self.model.setParam('IntFeasTol', 1e-9)
-        self.model.setParam('NumericFocus', 3)  # Alta precisione numerica
+
         self.inst = problem
         self.p = problem.p
         self.w = problem.w
@@ -186,7 +184,9 @@ class SKWP:
     def solve_all(self, verbose=False, time_limit=None, w_init= None):
         if not verbose:
             self.model.setParam('OutputFlag', 0)
-
+        self.model.setParam('FeasibilityTol', 1e-9)
+        self.model.setParam('IntFeasTol', 1e-9)
+        self.model.setParam('NumericFocus', 3)  # Alta precisione numerica
         if self.inst.K >= 360 and self.inst.M >= 360:
             self.model.setParam('Threads', 4)
             self.model.setParam('SoftMemLimit', 90)
@@ -217,31 +217,35 @@ class SKWP:
 
                 for i in range(self.L):
                     self.model.addConstr(
-                        w_k[k, i, j] <= x[k, i, j] * BigM
+                        w_k[k, i, j] <= x[k, i, j] * BigM, name='force w_in if x ' + str(k) + ' ' + str(j)
                     )
 
                 for i in range(self.L, self.M):
                     self.model.addConstr(
-                        w_k[k, i, j] == x[k, i, j] * self.w[k, i]
+                        w_k[k, i, j] == x[k, i, j] * self.w[k, i], name='force w_k of F  = self.w ' + str(k) + ' ' + str(j)
                     )
 
             for j in range(self.M):
                 ##### SE CI SONO OGGETTI CON PESO SUPERIORE ALLA CAPACITA' USARE C[K] COME UPPER NON E' SUFFICENTE
                 self.model.addConstr(
                     w_k[k, :, j].sum() <= w_k_in[k, j] + (1 - y[k, j]) * BigM, #self.c[k],
-                    name='force w if y ' + str(k) + ' ' + str(j)
+                    name='force w_in > w if y ' + str(k) + ' ' + str(j)
                 )
 
                 self.model.addConstr(
-                    w_k_in[k, j] <= y[k, j] * self.c[k]
+                    w_k_in[k, j] <= y[k, j] * self.c[k], name='force w_in < 0 if y 0 ' + str(k) + ' ' + str(j)
                 )
 
                 self.model.addConstr(
-                    w_k[k, :, j].sum() >= w_k_in[k, j]
+                    w_k[k, :, j].sum() >= w_k_in[k, j], name='force w_in < w if y 0 ' + str(k) + ' ' + str(j)
                 )
 
                 self.model.addConstr(
-                    w_k_in[k, :j + 1].sum() >= self.c[k] - y[k, j] * self.c[k]
+                    w_k_in[k, :j].sum() + w_k[k, :, j].sum() >= self.c[k] + 1e-8 - y[k, j] * self.c[k], name='force  y=1 if cap ' + str(k) + ' ' + str(j)
+                )
+
+                self.model.addConstr(
+                    w_k_in[k, :j + 1].sum() + 1e-8 <= self.c[k] + (1 - y[k, j]) * BigM, name='force  y=1 if cap ' + str(k) + ' ' + str(j)
                 )
 
             for j in range(self.M):
@@ -255,7 +259,7 @@ class SKWP:
                 )
             ##### CREA PROBLEMI, MA MI SEMBRA CHE SENZA QUESTO NON STIAMO FORZANDO LE Y AD ESSERE 0 QUANDO L'OGGETTO CORRISPONDENTE ECCEDE LA CAPACITA' (RESIDUA)
             ##### MA SOLO AD ESSERE 1 QUANDO STA SOTTO LA CAPACITA (RESIUDA)
-            #self.model.addConstr(w_k_in.sum(axis=-1) <= self.c)
+            # self.model.addConstr(w_k_in.sum(axis=-1) <= self.c, name='cap ' + str(k))
             self.model.addConstr(w == w_k[k, :self.L].sum(axis=-1), name='w == w_k' + str(k) + ' ')
 
 
@@ -281,17 +285,18 @@ class SKWP:
         w_copy = self.inst.w.copy()
         w_sol = w.x
         for k in range(self.inst.K):
-            w_copy[:, :self.inst.L] = w_sol
-            idx_eff = np.argsort(-self.inst.p[k, self.inst.L:] / self.inst.w[k, self.inst.L:])
-
-            sol = y.x == 1
+            w_copy[k, :self.inst.L] = w_sol
+            idx_eff = np.argsort(w_copy[k] / self.inst.p[k])
+            sol[k] = y.x[k][np.argsort(idx_eff)]
+            #
+            # sol = y.x == 1
             #sol[k, self.inst.L:] = y.x[k, 1: -1][np.argsort(idx_eff)]
             #sol[k, :self.inst.L] = x.x[k].sum(axis=0) >= 1
 
-        print('cap', self.inst.c)
-        print('w', w_copy)
-        print('inef ', w_copy / self.inst.p)
-        print('sol ', sol)
-        print('used_cap', (w_copy * sol).sum(axis=1))
+        # print('cap', self.inst.c)
+        # print('w', w_copy)
+        # print('inef ', w_copy / self.inst.p)
+        # print('sol ', sol)
+        # print('used_cap', (w_copy * sol).sum(axis=1))
 
-        return self.model.objVal, w_sol, sol
+        return self.model.objVal, w_sol, y.x

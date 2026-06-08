@@ -106,12 +106,12 @@ class SKWP_instance:
             capacity_left = self.c[k]
             # Scorre gli item in ordine di efficienza
             for idx in indexes[k]:
-                if w[k, idx] <= capacity_left + 1e-8:  # Se l'item può entrare
+                if w[k, idx] <= capacity_left + 1e-9:  # Se l'item può entrare
                     sol[k, idx] = True
                     capacity_left -= w[k, idx]
                     capacity_left = capacity_left.round(9)
                 # Altrimenti salta l'item e continua con il prossimo
-        print(sol)
+        # print(sol)
         val = (w * sol)[:, :self.L].sum(axis=-1).sum(axis=-1)
         return val, sol
 
