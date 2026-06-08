@@ -22,7 +22,7 @@ for i in range(30):
 
     solver_3 = SKWP(pb)
     # obj_3, w_3, sol_item = solver_3.solve_all(verbose=False, time_limit=3600, w_init = ga.best_solution)
-    obj_3, w_3, sol_item = solver_3.solve_all(verbose=False, time_limit=3600)
+    obj_3, w_3 = solver_3.solve(verbose=False, time_limit=3600)
 
 
     # obj_4, w_4, sol_item_ = solver_3.solve_all(verbose=False, time_limit=3600)
