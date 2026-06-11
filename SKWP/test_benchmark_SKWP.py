@@ -31,7 +31,7 @@ SOLVER_CASES = CASES
 case_num = dict(zip(CASES, range(len(CASES))))
 print(case_num)
 
-N_RUNS = 10
+N_RUNS = 30
 
 
 columns = ['run', 'commodities', 'paths',
@@ -53,21 +53,21 @@ for case in CASES:
         np.random.seed(run)
         instance = SKWPGraph(paths, comm, extended=EXTENDED)
 
-        ga = GA_SKWP(instance, pop_size=POPULATION, method=METHOD)
-        ga.run(BASELINE_ITERATIONS)
+        #ga = GA_SKWP(instance, pop_size=POPULATION, method=METHOD)
+        #ga.run(BASELINE_ITERATIONS)
 
-        ga_nn = GA_SKWP(instance, pop_size=POPULATION, method=METHOD)
-        net_time = time.time()
-        samples = agent.get_distribution(instance, POPULATION)
+        #ga_nn = GA_SKWP(instance, pop_size=POPULATION, method=METHOD)
+        #net_time = time.time()
+        #samples = agent.get_distribution(instance, POPULATION)
 
-        _, net_best_sample = instance.eval_sample(samples, method=METHOD)
-        net_time = time.time() - net_time
+        #_, net_best_sample = instance.eval_sample(samples, method=METHOD)
+        #net_time = time.time() - net_time
 
-        mean_val = instance.eval(agent.get_mean(instance), method=METHOD)
+        #mean_val = instance.eval(agent.get_mean(instance), method=METHOD)
 
-        ga_nn.run(BASELINE_ITERATIONS, init_population=instance.rescale_w(samples))
-        wins += ga.best_val <= ga_nn.best_val
-        gaps += [ga_nn.best_val / ga.best_val] if ga.best_val > 0 else ([-1] if ga_nn.best_val > 0 else [-2])
+        #ga_nn.run(BASELINE_ITERATIONS, init_population=instance.rescale_w(samples))
+        #wins += ga.best_val <= ga_nn.best_val
+        #gaps += [ga_nn.best_val / ga.best_val] if ga.best_val > 0 else ([-1] if ga_nn.best_val > 0 else [-2])
 
         if case in SOLVER_CASES:
             solver = SKWP(instance)
@@ -77,19 +77,19 @@ for case in CASES:
         else:
             solver_time, solver_obj, solver_final_gap, solver_status = [-1] * 4
 
-        exact_gaps += [ga_nn.best_val / solver_obj]
-        print(ga_nn.best_val / ga.best_val, ga_nn.best_val / solver_obj)
-        df.loc[df.shape[0]] = [run, comm, paths,
-                               solver_obj, ga_nn.best_val, net_best_sample, mean_val, ga.best_val,
-                               solver_final_gap, solver_status,
-                               solver_time, ga_nn.time + net_time, net_time, ga.time, case_num[case]]
+        #exact_gaps += [ga_nn.best_val / solver_obj]
+        #print(ga_nn.best_val / ga.best_val, ga_nn.best_val / solver_obj)
+        #df.loc[df.shape[0]] = [run, comm, paths,
+        #                       solver_obj, ga_nn.best_val, net_best_sample, mean_val, ga.best_val,
+        #                       solver_final_gap, solver_status,
+        #                       solver_time, ga_nn.time + net_time, net_time, ga.time, case_num[case]]
         df_exact.loc[df_exact.shape[0]] = [run, comm, paths,
                                solver_obj,
                                solver_final_gap, solver_status,
                                solver_time, case_num[case]]
 
     print(paths, comm, wins / N_RUNS, np.mean(gaps), np.mean(exact_gaps))
-    df.to_csv('SKWP/Results/' + model_name + '.csv')
+    #df.to_csv('SKWP/Results/' + model_name + '.csv')
     df_exact.to_csv('SKWP/Results/' + 'exact_results.csv', index=False)
 
 
