@@ -11,7 +11,7 @@ pop_size = 10
 
 for i in range(30):
     np.random.seed(i)
-    pb = SKWP_instance(5, 4)
+    pb = SKWP_instance(20, 2)
 
     ga = GA_SKWP(pb, pop_size, method='g')
     ga.run(10, verbose=False)
@@ -22,7 +22,7 @@ for i in range(30):
 
     solver_3 = SKWP(pb)
     # obj_3, w_3, sol_item = solver_3.solve_all(verbose=False, time_limit=3600, w_init = ga.best_solution)
-    obj_3, w_3 = solver_3.solve(verbose=False, time_limit=3600)
+    obj_3, w_3 = solver_3.solve(verbose=True, time_limit=3600)
 
 
     # obj_4, w_4, sol_item_ = solver_3.solve_all(verbose=False, time_limit=3600)
@@ -50,3 +50,7 @@ for i in range(30):
 # ga_val, sol_ga = pb.compute_obj(ga.best_solution.reshape(1, -1))
 # print(pb.compute_obj(w_exact.reshape(1, -1))[0], pb.compute_obj(w_3.reshape(1, -1))[0], ga_val)
 # print(obj, obj_3, ga.best_val)
+
+
+# 0.02328722462856877 * w_k_copy[0,0,1] + -0.02328722462856877 * w_k_copy[0,0,2] + 0.015397881251539788 * w_k_copy[0,1,1] + -0.015397881251539788 * w_k_copy[0,1,2] + 0.022562667809841837 * w_k_copy[0,2,1] + -0.022562667809841837 * w_k_copy[0,2,2]
+# 0.02328722462856877 * w_k_copy[0,0,0] + -0.02328722462856877 * w_k_copy[0,0,1] + 0.015397881251539788 * w_k_copy[0,1,0] + -0.015397881251539788 * w_k_copy[0,1,1] + 0.022562667809841837 * w_k_copy[0,2,0] + -0.022562667809841837 * w_k_copy[0,2,1]
