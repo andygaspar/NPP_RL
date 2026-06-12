@@ -52,18 +52,23 @@ class SKWP:
         x = self.model.addMVar((self.K, self.M, self.M), vtype=GRB.BINARY, name='x')
         y = self.model.addMVar((self.K, self.M), vtype=GRB.BINARY, name='y')
 
-        self.model.addConstr(x.sum(axis=-1) == 1, name='xi = 1 ')
-        self.model.addConstr(x.sum(axis=1) == 1, name='xj = 1 ')
+        # compute init solution with most efficient
+        min_w_idxs = np.unravel_index(np.argmin(self.p[:, :self.L]), self.p[:, :self.L].shape)
+        max_feasible_efficiency = (self.p[:, self.L:] / self.w[:, self.L:] *
+                                   (self.w[:, self.L:] <= np.repeat(self.c[:, None], self.M - self.L, axis=1) )).max()
+        init_w_val = self.p[:, :self.L].min() / max_feasible_efficiency
 
         BigM = max(self.c.max() + 1, self.w.max() + 1)
-        w.start = BigM
+        w_init = np.ones(self.L) * BigM
+        w_init[min_w_idxs[1]] = init_w_val
+        w.start = w_init
 
         w_copy = self.inst.w.copy()
         w_k_copy = np.zeros((self.K, self.M, self.M))
-        _, sol = self.inst.compute_obj(np.ones((1, self.L)) * BigM)
+        _, sol = self.inst.compute_obj(w_init.reshape(1, -1))
 
         for k in range(self.K):
-            w_copy[k, :self.inst.L] = BigM
+            w_copy[k, :self.inst.L] = w_init
             idx_eff = np.argsort(w_copy[k] / self.inst.p[k])
             x_sol = np.zeros((self.M, self.M))
             x_sol[idx_eff, range(self.M)] = 1
@@ -76,6 +81,8 @@ class SKWP:
         w_k.start = w_k_copy
         # self.model.addConstr(w_k == w_k_copy)
 
+        self.model.addConstr(x.sum(axis=-1) == 1, name='xi = 1 ')
+        self.model.addConstr(x.sum(axis=1) == 1, name='xj = 1 ')
 
 
         # print('cap    ', self.c.max())

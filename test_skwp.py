@@ -11,7 +11,7 @@ pop_size = 10
 
 for i in range(30):
     np.random.seed(i)
-    pb = SKWP_instance(20, 2)
+    pb = SKWP_instance(56, 2)
 
     ga = GA_SKWP(pb, pop_size, method='g')
     ga.run(10, verbose=False)

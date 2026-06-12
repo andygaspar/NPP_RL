@@ -12,9 +12,14 @@ class SKWP_instance:
         self.F = self.M - self.L
 
         self.w = np.random.uniform(1, 100, size=(self.K, self.M))
-        # self.c = self.w.sum(axis=1)//4
-        # self.p = self.w + 10
         self.c = np.random.uniform(self.w.sum(axis=1) * 0.1, self.w.sum(axis=1) * 0.9)
+
+        # fix if no followers item is feasible
+        if (self.w[:, self.L:].min(axis=-1) > self.c).sum() == self.K:
+            min_idxs = np.unravel_index(np.argmin(self.w[:, self.L:]), self.w[:, self.L:].shape)
+            min_idxs = min_idxs[0], min_idxs[1] + self.L
+            self.w[min_idxs] = self.c.min()
+
         self.p = np.random.uniform(1, 100, size=(self.K, self.M))
 
         self.p = np.round(self.p, 3)
