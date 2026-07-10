@@ -147,7 +147,7 @@ class SKWP:
 
         self.model.setObjective(w_leader_in.sum(), gb.GRB.MAXIMIZE)
         if time_limit is not None:
-            self.model.setParam('TimeLimit', time_limit - constr_time)
+            self.model.setParam('TimeLimit', max(60.0, time_limit - constr_time))
 
         self.model.optimize()
         self.time = time.time() - tt
@@ -234,7 +234,7 @@ class SKWP:
 
         self.model.setObjective(w.sum(), gb.GRB.MAXIMIZE)
         if time_limit is not None:
-            self.model.setParam('TimeLimit', time_limit - constr_time)
+            self.model.setParam('TimeLimit', max(60.0, time_limit - constr_time))
 
         self.model.optimize()
         self.time = time.time() - tt
