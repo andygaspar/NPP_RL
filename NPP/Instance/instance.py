@@ -77,7 +77,7 @@ class Instance(nx.Graph):
         self.partial = partial
 
         self.MIN_CR_FREE, self.MAX_CR_FREE = (10, 30) if partial else (20, 30)
-        self.MIN_CR_TRANSFER, self.MAX_CR_TRANSFER = (20, 30)
+        self.MIN_CR_TRANSFER, self.MAX_CR_TRANSFER = (1, 20)
         self.MIN_N_USERS, self.MAX_N_USERS = (1, 10)
         self.cr_free = (self.MIN_CR_FREE, self.MAX_CR_FREE)
         self.cr_transfer = (self.MIN_CR_TRANSFER, self.MAX_CR_TRANSFER)

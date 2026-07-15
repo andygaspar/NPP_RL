@@ -63,3 +63,10 @@ class Genetic:
     def eval(self, init_population):
         self.final_vals = self.genetic.eval(init_population)
         self.best_val = self.final_vals.max()
+
+
+'''
+    void eval(double* init_pop) {
+        init_population(init_pop);
+    }
+'''

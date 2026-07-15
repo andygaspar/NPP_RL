@@ -53,8 +53,8 @@ for case in CASES:
         np.random.seed(run)
         instance = SKWPGraph(paths, comm, extended=EXTENDED)
 
-        #ga = GA_SKWP(instance, pop_size=POPULATION, method=METHOD)
-        #ga.run(BASELINE_ITERATIONS)
+        ga = GA_SKWP(instance, pop_size=POPULATION, method=METHOD)
+        ga.run(BASELINE_ITERATIONS)
 
         #ga_nn = GA_SKWP(instance, pop_size=POPULATION, method=METHOD)
         #net_time = time.time()

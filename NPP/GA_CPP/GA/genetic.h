@@ -240,24 +240,24 @@ class Genetic {
         size_t k;
         int j, p;
         double std;
-        
+
         double m_rate = mutation_rate;
 
         for(int iter= 0; iter<iterations; iter ++) {
-        
+
             short th;
             reshuffle_element_order(random_order);
             // print_pop();
             #pragma omp parallel for num_threads(n_threads) default(none) private(th) shared(upper_bounds, population, transfer_costs, commodities_tax_free, a_combs, b_combs, random_order, random_element_order, n_commodities, init_commodity_val, n_paths, recombination_size, generators, tolerance)
             for(short i=0; i < off_size; i++) {
                 th = omp_get_thread_num();
-                generate(population[indices[a_combs[random_order[i]]]], 
-                        population[indices[b_combs[random_order[i]]]], 
-                        population[indices[pop_size + i]], 
+                generate(population[indices[a_combs[random_order[i]]]],
+                        population[indices[b_combs[random_order[i]]]],
+                        population[indices[pop_size + i]],
                         upper_bounds[th], lower_bounds[th], random_element_order[th], mutation_rate, n_paths, recombination_size, generators[th]);
                 vals[indices[pop_size + i]] = eval(population[indices[pop_size + i]], transfer_costs[th], commodities_tax_free[th], n_users[th], n_commodities, n_paths, tolerance);
                 }
-            
+
 
             argsort(vals, indices, pop_total_size);
                 if(vals[indices[0]] > best_val) {
@@ -266,25 +266,26 @@ class Genetic {
             }
             else no_improvement ++;
 
-            /*
-            if(no_improvement >= 50000) {
+/*
+            if(no_improvement >= 500) {
                 restart_population();
                 //std::cout<<"restarted"<<std::endl;
-                
+
                 no_improvement = 0;
-            }*/
+            }
+            */
 
             std = get_std(vals, indices, pop_size);
             if(verbose and  iter%100 == 0 and iter > 0) std::cout<<"iteration "<< iter<<"    "<<vals[indices[0]]<<"   mean " <<get_mean(vals, indices, pop_size)<<"   std " <<std<<"   no impr " <<no_improvement<<std::endl;
             //if(std < 0.0000001) {restart_population(); }//std::cout<<"restarted "<<std<<std::endl;}
         }
-        
+
         best_val = vals[indices[0]];
         if(verbose) std::cout<<"final iteration "<<best_val<<std::endl;
-        
-        
 
-        
+
+
+
     }
 
     double eval(const std::vector<double> &p,const std::vector<std::vector<double>> & trans_costs, const std::vector<double> &comm_tax_free, const std::vector<int> n_usr, const short n_comm, const short num_paths, const double tol){
@@ -339,11 +340,11 @@ class Genetic {
     }
 
 
-    void restart_population() { 
+    void restart_population() {
         short th;
         #pragma omp parallel for num_threads(n_threads) default(none) private(th) shared(upper_bounds, population, transfer_costs, commodities_tax_free, n_commodities, n_paths, generators, tolerance)
         for(int i=1; i < pop_size; i++){
-            std::uniform_real_distribution<double> distribution;       
+            std::uniform_real_distribution<double> distribution;
             th = omp_get_thread_num();
             for(int j=0; j < n_paths; j++) {
                 distribution = std::uniform_real_distribution<double> (lower_bounds[th][i], upper_bounds[th][j]);
