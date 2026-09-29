@@ -2,14 +2,24 @@ import time
 
 import numpy as np
 import pandas as pd
+from sympy.codegen import Print
+
+from Initialisations.initialisations import init_lhc, init_sobol, init_halton, init_kronecker
 from NPP.Instance.gat_instance import GATInstance
 from NPP.Solver.genetic_solver import Genetic
 from GAT.gat import load_agent
 from NPP.Solver.solver import NPPSolver
+import os
 
-file_name = 'NPP/NET/test_20_90.pth'
+# os.system('chmod +x install.sh')
+# os.system('./install.sh')
 
-df_exact = pd.read_csv('NPP/Results/exact_results.csv')
+# time.sleep(1)
+
+file_name = 'NPP/NET/best_npp.pth'
+
+# df_exact = pd.read_csv('NPP/Results/exact_results.csv')
+
 
 agent = load_agent(file_name)
 device = agent.device
@@ -23,24 +33,46 @@ TIME_LIMIT = 1800
 CASES = [(20, 20), (56, 56), (90, 90), (180, 180), (360, 360), (450, 450), (20, 450), (450, 20)]
 case_num = dict(zip(CASES, range(len(CASES))))
 
-N_RUNS = 10
+N_RUNS = 30
 
 
 columns = ['run', 'commodities', 'paths',
            'obj_exact', 'obj_nn_ga', 'obj_nn_sample', 'obj_nn_mean', 'obj_ga',
+           'obj_ga_lhc', 'obj_ga_sobol', 'obj_ga_halton', 'obj_ga_kronecker',
            'mip_GAP', 'status',
-           'time_exact', 'time_nn_ga','time_nn', 'time_ga', 'case_num']
+           'time_exact', 'time_nn_ga','time_nn', 'time_ga',
+           'time_ga_lhc', 'time_ga_sobol', 'time_ga_halton', 'time_ga_kronecker', 'case_num']
 
 df = pd.DataFrame(columns=columns)
 
 for case in CASES:
     paths, comm = case
     wins, gaps, exact_gaps = 0, [], []
+    print('case:', case)
     for run in range(N_RUNS):
         instance = GATInstance(paths, comm, seed=run)
 
         ga = Genetic(instance, pop_size=POPULATION, verbose=False)
         ga.run(BASELINE_ITERATIONS)
+
+        ga_lhc = Genetic(instance, pop_size=POPULATION, verbose=False)
+        lhc_sample = init_lhc(instance.n_paths, POPULATION, instance.lower_bounds, instance.upper_bounds)
+        ga_lhc.run(BASELINE_ITERATIONS, init_population=lhc_sample)
+
+
+        ga_sobol = Genetic(instance, pop_size=POPULATION, verbose=False)
+        sobol_sample = init_sobol(instance.n_paths, POPULATION, instance.lower_bounds, instance.upper_bounds)
+        ga_sobol.run(BASELINE_ITERATIONS, init_population=sobol_sample)
+
+        ga_halton = Genetic(instance, pop_size=POPULATION, verbose=False)
+        halton_sample = init_halton(instance.n_paths, POPULATION, instance.lower_bounds, instance.upper_bounds)
+        ga_halton.run(BASELINE_ITERATIONS, init_population=halton_sample)
+
+        ga_kronecker = Genetic(instance, pop_size=POPULATION, verbose=False)
+        kronecker_sample = init_kronecker(instance.n_paths, POPULATION, instance.lower_bounds, instance.upper_bounds)
+        ga_kronecker.run(BASELINE_ITERATIONS, init_population=kronecker_sample)
+
+
 
         ga_nn = Genetic(instance, pop_size=POPULATION, verbose=False)
         net_time = time.time()
@@ -55,25 +87,29 @@ for case in CASES:
         ga_nn.run(BASELINE_ITERATIONS, init_population=instance.rescale_prices(samples))
         wins += ga.best_val <= ga_nn.best_val
         gaps += [ga_nn.best_val / ga.best_val] if ga.best_val > 0 else ([-1] if ga_nn.best_val > 0 else [-2])
-
+        #
         solver = NPPSolver(instance, time_limit=TIME_LIMIT, verbose=False)
-        # solver.solve()
+        solver.solve()
+
+        exact_gaps += [ga_nn.best_val / solver.obj]
+        df.loc[df.shape[0]] = [run, comm, paths,
+                               solver.obj, ga_nn.best_val, net_best_sample, mean_val, ga.best_val,
+                               ga_lhc.best_val, ga_sobol.best_val, ga_halton.best_val, ga_kronecker.best_val,
+                               solver.final_gap, solver.m.status,
+                               solver.time, ga_nn.time + net_time, net_time, ga.time,
+                               ga_lhc.time, ga_sobol.time, ga_halton.time, ga_kronecker.time, case_num[case]]
+
+        # solver = df_exact[(df_exact.case_num == case_num[case]) & (df_exact.run == run)].iloc[0]
         # exact_gaps += [ga_nn.best_val / solver.obj]
         # df.loc[df.shape[0]] = [run, comm, paths,
         #                        solver.obj, ga_nn.best_val, net_best_sample, mean_val, ga.best_val,
-        #                        solver.final_gap, solver.m.status,
-        #                        solver.time, ga_nn.time + net_time, net_time, ga.time, case_num]
+        #                        solver.mip_GAP, solver.status,
+        #                        solver.time_exact, ga_nn.time + net_time, net_time, ga.time, case_num[case]]
 
-        solver = df_exact[(df_exact.case_num == case_num[case]) & (df_exact.run == run)].iloc[0]
-        exact_gaps += [ga_nn.best_val / solver.obj_exact]
-        df.loc[df.shape[0]] = [run, comm, paths,
-                               solver.obj_exact, ga_nn.best_val, net_best_sample, mean_val, ga.best_val,
-                               solver.mip_GAP, solver.status,
-                               solver.time_exact, ga_nn.time + net_time, net_time, ga.time, case_num[case]]
+        print(ga.best_val, ga_lhc.best_val, ga_sobol.best_val, ga_halton.best_val, ga_kronecker.best_val, ga_nn.best_val,  solver.obj)
 
     print(paths, comm, wins / N_RUNS, np.mean(gaps), np.mean(exact_gaps))
-    df.to_csv('NPP/Results/test_.csv')
-
+    df.to_csv('NPP/Results/test_npp_new.csv')
 
 #
 # import pandas as pd

@@ -2,6 +2,8 @@ import time
 
 import numpy as np
 import pandas as pd
+
+from Initialisations.initialisations import init_lhc, init_sobol, init_halton, init_kronecker
 from SKWP.SKWP_graph_instance import SKWPGraph
 from SKWP.GA_SKWP import GA_SKWP
 from GAT.gat import load_agent
@@ -10,10 +12,10 @@ from SKWP.skwp_solver import SKWP
 EXTENDED = True
 model_name = 'test_skwp_20_50_2026-02-27 22:48:24'
 
-file_name = 'SKWP/NET/' + model_name + '.pth'
-
-agent = load_agent(file_name)
-device = agent.device
+# file_name = 'SKWP/NET/' + model_name + '.pth'
+#
+# agent = load_agent(file_name)
+# device = agent.device
 
 BASELINE_ITERATIONS = 1000
 POPULATION = 128
@@ -56,6 +58,24 @@ for case in CASES:
         ga = GA_SKWP(instance, pop_size=POPULATION, method=METHOD)
         ga.run(BASELINE_ITERATIONS)
 
+        ga_lhc = GA_SKWP(instance, pop_size=POPULATION, method=METHOD)
+        lhc_sample = init_lhc(instance.L, POPULATION, np.zeros(instance.L), instance.max_w)
+        ga_lhc.run(BASELINE_ITERATIONS, init_population=lhc_sample)
+
+        ga_sobol = GA_SKWP(instance, pop_size=POPULATION, method=METHOD)
+        sobol_sample = init_sobol(instance.L, POPULATION, np.zeros(instance.L), instance.max_w)
+        ga_sobol.run(BASELINE_ITERATIONS, init_population=sobol_sample)
+
+        ga_halton = GA_SKWP(instance, pop_size=POPULATION, method=METHOD)
+        halton_sample = init_halton(instance.L, POPULATION, np.zeros(instance.L), instance.max_w)
+        ga_halton.run(BASELINE_ITERATIONS, init_population=halton_sample)
+
+        ga_kronecker = GA_SKWP(instance, pop_size=POPULATION, method=METHOD)
+        kronecker_sample = init_kronecker(instance.L, POPULATION, np.zeros(instance.L), instance.max_w)
+        ga_kronecker.run(BASELINE_ITERATIONS, init_population=kronecker_sample)
+
+
+
         #ga_nn = GA_SKWP(instance, pop_size=POPULATION, method=METHOD)
         #net_time = time.time()
         #samples = agent.get_distribution(instance, POPULATION)
@@ -77,16 +97,18 @@ for case in CASES:
         else:
             solver_time, solver_obj, solver_final_gap, solver_status = [-1] * 4
 
+        print(ga.best_val, ga_lhc.best_val, ga_sobol.best_val, ga_halton.best_val, ga_kronecker.best_val, solver.obj)
+
         #exact_gaps += [ga_nn.best_val / solver_obj]
         #print(ga_nn.best_val / ga.best_val, ga_nn.best_val / solver_obj)
         #df.loc[df.shape[0]] = [run, comm, paths,
         #                       solver_obj, ga_nn.best_val, net_best_sample, mean_val, ga.best_val,
         #                       solver_final_gap, solver_status,
         #                       solver_time, ga_nn.time + net_time, net_time, ga.time, case_num[case]]
-        df_exact.loc[df_exact.shape[0]] = [run, comm, paths,
-                               solver_obj,
-                               solver_final_gap, solver_status,
-                               solver_time, case_num[case]]
+        # df_exact.loc[df_exact.shape[0]] = [run, comm, paths,
+        #                        solver_obj,
+        #                        solver_final_gap, solver_status,
+        #                        solver_time, case_num[case]]
 
     print(paths, comm, wins / N_RUNS, np.mean(gaps), np.mean(exact_gaps))
     #df.to_csv('SKWP/Results/' + model_name + '.csv')

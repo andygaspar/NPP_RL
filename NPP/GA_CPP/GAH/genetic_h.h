@@ -293,7 +293,7 @@ class GeneticH {
 
             std = get_std(vals, indices, pop_size);
             if(verbose and  iter%100 == 0 and iter > 0) std::cout<<"iteration "<< iter<<"    "<<vals[indices[0]]<<"   mean " <<get_mean(vals, indices, pop_size)<<"   std " <<std<<"   no impr " <<no_improvement<<std::endl;
-            if(std < 0.0000001) {restart_population(); }//std::cout<<"restarted "<<std<<std::endl;}
+            //if(std < 0.0000001) {restart_population(); }//std::cout<<"restarted "<<std<<std::endl;}
         }
         
         best_val = vals[indices[0]];
