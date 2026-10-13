@@ -54,3 +54,16 @@ for i in range(30):
 
 # 0.02328722462856877 * w_k_copy[0,0,1] + -0.02328722462856877 * w_k_copy[0,0,2] + 0.015397881251539788 * w_k_copy[0,1,1] + -0.015397881251539788 * w_k_copy[0,1,2] + 0.022562667809841837 * w_k_copy[0,2,1] + -0.022562667809841837 * w_k_copy[0,2,2]
 # 0.02328722462856877 * w_k_copy[0,0,0] + -0.02328722462856877 * w_k_copy[0,0,1] + 0.015397881251539788 * w_k_copy[0,1,0] + -0.015397881251539788 * w_k_copy[0,1,1] + 0.022562667809841837 * w_k_copy[0,2,0] + -0.022562667809841837 * w_k_copy[0,2,1]
+
+
+
+import pandas as pd
+
+df = pd.read_csv('SKWP/Results/results_skwp_k1_new.csv')
+
+
+df['gap'] = 1 - df.obj_nn_ga/df.obj_exact
+df['gap_rand'] = 1 - df.obj_nn_ga/df.obj_ga
+
+
+dd = df.groupby(['commodities', 'paths']).agg({'gap': ['mean', 'std'], 'gap_rand': ['mean', 'std']}).reset_index()

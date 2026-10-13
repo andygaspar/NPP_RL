@@ -2,7 +2,7 @@ import time
 
 import numpy as np
 import pandas as pd
-from sympy.codegen import Print
+# from sympy.codegen import Print
 
 from Initialisations.initialisations import init_lhc, init_sobol, init_halton, init_kronecker
 from NPP.Instance.gat_instance import GATInstance
