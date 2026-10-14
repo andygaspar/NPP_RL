@@ -48,6 +48,7 @@ for iteration in range(ITERATIONS):
     samples, log_probs, _ = agent(batch, N_SAMPLES)
 
     rewards, baselines, log_prices = [], [], []
+    groups = []
     wins, gaps = 0, []
     rand_wins, rand_gaps = 0, []
 
@@ -56,6 +57,7 @@ for iteration in range(ITERATIONS):
         mask = (batch.batch == i) * (batch.x[:, -1] == 1) # get only p controlled by the leader (i.e. x[:, -1 == 1) of the batch
         inst_sample_tensor = samples[:, mask]
         log_prices.append(log_probs[:, mask].flatten())
+        groups.append(torch.full((log_prices[-1].numel(),), i, device=device))  # instance index, for the per-instance advantage
 
         g = GA_SKPP(inst, pop_size=POPULATION)
         g.run(BASELINE_ITERATIONS)
@@ -82,8 +84,9 @@ for iteration in range(ITERATIONS):
     reward_tensor = torch.tensor(rewards, dtype=torch.float32, device=device)
     baseline_tensor = torch.tensor(baselines, dtype=torch.float32, device=device)
     log_prices = torch.cat(log_prices)
+    groups = torch.cat(groups)
 
-    loss = agent.train_policy(log_prices, reward_tensor, baseline_tensor)
+    loss = agent.train_policy(log_prices, reward_tensor, baseline_tensor, groups=groups)
 
     if iteration % 1 == 0:
         max_agent = reward_tensor.max().item()

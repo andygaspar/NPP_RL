@@ -12,6 +12,36 @@ class GATInstance(Instance):
         self.data = self.to_graph()
 
     def to_graph(self):
+        """
+        Bipartite commodity <-> path graph, no path-path edges.
+        An edge k-p exists only if M_k^p > 0, i.e. commodity k can use path p at a positive toll.
+        Commodity nodes: [n_users, c_od, 0, 0, 0, 1, 0]; path nodes: [0, 0, L_p, N_p, N_p - L_p, 0, 1].
+        Edge features: [M_k^p, c_k^p, n_users_k, position of the breakpoint M_k^p in [L_p, N_p]].
+        """
+        n_comm = len(self.commodities)
+        scale = max(self.upper_bounds.max(), 1e-6)
+        span = np.maximum(self.upper_bounds - self.lower_bounds, 1e-6)
+
+        x_comm = [[c.n_users / 10, c.c_od / 30, 0, 0, 0, 1, 0] for c in self.commodities]
+        x_path = [[0, 0, p.L_p / scale, p.N_p / scale, (p.N_p - p.L_p) / scale, 0, 1] for p in self.paths]
+
+        m = np.array([[c.M_p[p.name] for p in self.paths] for c in self.commodities])  # (commodities, paths)
+        c_p = np.array([[c.c_p[p.name] for p in self.paths] for c in self.commodities])
+        n_users = np.array([c.n_users for c in self.commodities], dtype=float)
+        l_p = np.array([p.L_p for p in self.paths])
+
+        k, j = np.nonzero(m > 0)
+        attr = np.stack([m[k, j] / scale, c_p[k, j] / 20, n_users[k] / 10,
+                         np.clip((m[k, j] - l_p[j]) / span[j], 0, 1)], axis=1)
+        src, dst = np.concatenate([k, n_comm + j]), np.concatenate([n_comm + j, k])
+
+        return Data(x=torch.tensor(x_comm + x_path, dtype=torch.float),
+                    edge_index=torch.tensor(np.stack([src, dst]), dtype=torch.long),
+                    edge_attr=torch.tensor(np.concatenate([attr, attr]), dtype=torch.float),
+                    num_commodities=n_comm, num_paths=len(self.paths))
+
+    def to_graph_egat(self):
+        """Graph of the original EGAT (complete path-path subgraph), kept for the old networks."""
 
         # Combine all nodes with type encoding
         num_commodities = len(self.commodities)

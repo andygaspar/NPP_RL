@@ -7,7 +7,7 @@ import pandas as pd
 from Initialisations.initialisations import init_lhc, init_sobol, init_halton, init_kronecker
 from NPP.Instance.gat_instance import GATInstance
 from NPP.Solver.genetic_solver import Genetic
-from GAT.gat import load_agent
+from GAT.policy import load_policy
 from NPP.Solver.solver import NPPSolver
 import os
 
@@ -16,12 +16,15 @@ import os
 
 # time.sleep(1)
 
-file_name = 'NPP/NET/best_npp.pth'
+file_name = 'NPP/NET/npp_policy_20_90.pth'
 
-# df_exact = pd.read_csv('NPP/Results/exact_results.csv')
+# exact values: read from the saved results (Gurobi, 1800 s time limit) instead of solving again
+RUN_EXACT = False
+EXACT_FILE = 'test_npp_new.csv'
+df_exact = None if RUN_EXACT else pd.read_csv(EXACT_FILE)
 
 
-agent = load_agent(file_name)
+agent = load_policy(file_name)
 device = agent.device
 
 BASELINE_ITERATIONS = 10000
@@ -87,16 +90,21 @@ for case in CASES:
         ga_nn.run(BASELINE_ITERATIONS, init_population=instance.rescale_prices(samples))
         wins += ga.best_val <= ga_nn.best_val
         gaps += [ga_nn.best_val / ga.best_val] if ga.best_val > 0 else ([-1] if ga_nn.best_val > 0 else [-2])
-        #
-        solver = NPPSolver(instance, time_limit=TIME_LIMIT, verbose=False)
-        solver.solve()
+        if RUN_EXACT:
+            solver = NPPSolver(instance, time_limit=TIME_LIMIT, verbose=False)
+            solver.solve()
+            solver_obj, solver_gap, solver_status, solver_time = solver.obj, solver.final_gap, solver.m.status, solver.time
+        else:
+            ex = df_exact[(df_exact.paths == paths) & (df_exact.commodities == comm) & (df_exact.run == run)]
+            solver_obj, solver_gap, solver_status, solver_time = ((ex.iloc[0].obj_exact, ex.iloc[0].mip_GAP, ex.iloc[0].status, ex.iloc[0].time_exact)
+                                                                  if len(ex) else (np.nan,) * 4)
 
-        exact_gaps += [ga_nn.best_val / solver.obj]
+        exact_gaps += [ga_nn.best_val / solver_obj]
         df.loc[df.shape[0]] = [run, comm, paths,
-                               solver.obj, ga_nn.best_val, net_best_sample, mean_val, ga.best_val,
+                               solver_obj, ga_nn.best_val, net_best_sample, mean_val, ga.best_val,
                                ga_lhc.best_val, ga_sobol.best_val, ga_halton.best_val, ga_kronecker.best_val,
-                               solver.final_gap, solver.m.status,
-                               solver.time, ga_nn.time + net_time, net_time, ga.time,
+                               solver_gap, solver_status,
+                               solver_time, ga_nn.time + net_time, net_time, ga.time,
                                ga_lhc.time, ga_sobol.time, ga_halton.time, ga_kronecker.time, case_num[case]]
 
         # solver = df_exact[(df_exact.case_num == case_num[case]) & (df_exact.run == run)].iloc[0]
@@ -106,7 +114,7 @@ for case in CASES:
         #                        solver.mip_GAP, solver.status,
         #                        solver.time_exact, ga_nn.time + net_time, net_time, ga.time, case_num[case]]
 
-        print(ga.best_val, ga_lhc.best_val, ga_sobol.best_val, ga_halton.best_val, ga_kronecker.best_val, ga_nn.best_val,  solver.obj)
+        print(ga.best_val, ga_lhc.best_val, ga_sobol.best_val, ga_halton.best_val, ga_kronecker.best_val, ga_nn.best_val, solver_obj)
 
     print(paths, comm, wins / N_RUNS, np.mean(gaps), np.mean(exact_gaps))
     df.to_csv('NPP/Results/test_npp_new.csv')

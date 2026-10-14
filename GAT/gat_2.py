@@ -28,6 +28,19 @@ def truncated_normal_log_prob(x, mu, sigma, low=0, high=1):
     return log_prob
 
 
+def truncated_normal_sample(mu, sigma, n_samples, low=0, high=1):
+    """
+    Sample from a normal truncated to [low, high] by inverse CDF.
+    The sample is drawn without gradient: REINFORCE needs d log_prob / d(mu, sigma) at a fixed sample.
+    Returns: tensor (n_samples, len(mu))
+    """
+    with torch.no_grad():
+        normal = torch.distributions.Normal(mu, sigma)
+        cdf_low, cdf_high = normal.cdf(torch.full_like(mu, low)), normal.cdf(torch.full_like(mu, high))
+        u = cdf_low + (cdf_high - cdf_low) * torch.rand((n_samples, len(mu)), device=mu.device)
+        return torch.clamp(normal.icdf(u.clamp(1e-7, 1 - 1e-7)), low, high)
+
+
 # Node Classification Model using EGAT
 class EGAT2(torch.nn.Module):
     def __init__(self, node_channels, edge_channels, hidden_channels=64, out_channels=2, lr=0.001, wd=0.0001, heads=3,
@@ -103,9 +116,7 @@ class EGAT2(torch.nn.Module):
         # mu = torch.sigmoid(mu_raw)  # Full [0,1] range, learnable center
         # sigma = 0.01 + torch.sigmoid(sigma_raw) * 0.49  # σ ∈ [0.01, 0.5] for exploration
 
-        eps = torch.randn((n_samples, len(mu)), device=mu.device)
-        sample = mu + sigma * eps
-        sample = torch.clamp(sample, 0, 1)  # Truncate to [0, 1]
+        sample = truncated_normal_sample(mu, sigma, n_samples, low=0, high=1)
 
         # Calculate log probabilities - MANUALLY with broadcasting
         # Expand mu and sigma to match sample shape
@@ -134,14 +145,19 @@ class EGAT2(torch.nn.Module):
             mask = batch.x[:, -1] == 1  # get only paths (i.e. x[:, -1 == 1) of the batch
             return mu[mask]
 
-    def train_policy(self, log_action, reward, baseline):
-
+    def train_policy(self, log_action, reward, baseline, groups=None):
+        """groups: instance index of each element of log_action; the advantage is normalised within each instance,
+        so that instances of different scale are not mixed. If None, the whole batch is one group."""
 
         advantage = reward - baseline
 
-        # Normalize advantage for stability
-        if advantage.std() > 0:
-            advantage = (advantage - advantage.mean()) / (advantage.std() + 1e-8)
+        # Normalize advantage for stability, per instance
+        if groups is None:
+            groups = torch.zeros_like(advantage, dtype=torch.long)
+        for g in torch.unique(groups):
+            sel = groups == g
+            adv = advantage[sel]
+            advantage[sel] = (adv - adv.mean()) / (adv.std() + 1e-8) if adv.std() > 0 else adv - adv.mean()
 
 
         loss = -(advantage * log_action).mean()
@@ -209,4 +225,5 @@ def load_agent(path, device=None) -> EGAT2:
                  heads=init_params['heads_init'], dropout=init_params['dropout_init'])
     agent.best_gap = init_params['best_gap']
     agent.load(path, device=device)
+    agent.eval()  # no dropout at inference
     return agent

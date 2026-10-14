@@ -13,6 +13,58 @@ class SKWPGraph(SKWP_instance):
         self.data = self.to_graph()
 
     def to_graph(self):
+        """
+        Bipartite item <-> follower graph, no item-item edges.
+        For follower k, e_k is the efficiency of the first follower item that does not fit in the greedy knapsack
+        filled with follower items only: a leader item i keeps being chosen by k roughly while
+        p[k, i] / w_i >= e_k, i.e. up to the threshold weight p[k, i] / e_k (the analogue of the NPP breakpoint).
+        Item nodes: [mean profit, mean weight (follower items), max_w (leader items), 0, 0, follower item, leader item]
+        Follower nodes: [capacity / sum of the leader max_w, 0, 0, capacity, e_k, 0, 0]
+        Edge features, leader item: [p[k, i], log((p[k, i] / max_w_i) / e_k), threshold / max_w_i, 1]
+                       follower item: [p[k, i], w[k, i], taken by the greedy, 0]
+        """
+        cap_max = self.c.max()
+        p_f, w_f = self.p[:, self.L:], self.w[:, self.L:]
+        e_break, taken = np.zeros(self.K), np.zeros((self.K, self.F))
+        for k in range(self.K):
+            capacity_left = self.c[k]
+            for idx in np.argsort(-p_f[k] / w_f[k]):
+                if w_f[k, idx] <= capacity_left:
+                    taken[k, idx] = 1
+                    capacity_left -= w_f[k, idx]
+                elif e_break[k] == 0:
+                    e_break[k] = p_f[k, idx] / w_f[k, idx]
+        threshold = np.where(e_break[:, None] > 0, self.p[:, :self.L] / np.maximum(e_break[:, None], 1e-12),
+                             self.c[:, None])
+        threshold = np.minimum(threshold, self.c[:, None])
+        rel_threshold = np.clip(threshold / self.max_w[None, :], 0, 1)  # (K, L)
+
+        x_items = [[self.p[:, i].mean() / 100,
+                    self.w[:, i].mean() / cap_max if i >= self.L else 0,
+                    self.max_w[i] / cap_max if i < self.L else 0,
+                    0, 0,
+                    float(i >= self.L), float(i < self.L)] for i in range(self.M)]
+        x_users = [[self.c[k] / self.max_w.sum(), 0, 0, self.c[k] / cap_max, e_break[k] / max(e_break.max(), 1e-12), 0, 0] for k in range(self.K)]
+
+        k, i = np.meshgrid(np.arange(self.K), np.arange(self.M), indexing='ij')
+        k, i = k.ravel(), i.ravel()
+        leader = i < self.L
+        third = np.where(leader, rel_threshold[k, np.minimum(i, self.L - 1)],
+                         taken[k, np.maximum(i - self.L, 0)])
+        # efficiency of leader item i at its maximum weight, relative to the break efficiency of follower k
+        eff_ratio = np.where(e_break[k] > 0, (self.p[k, i] / self.max_w[np.minimum(i, self.L - 1)]) / np.maximum(e_break[k], 1e-12), np.e ** 6)
+        second = np.where(leader, np.clip(np.log(np.maximum(eff_ratio, 1e-12)), -6, 6) / 6, self.w[k, i] / cap_max)
+        attr = np.stack([self.p[k, i] / 100, second, third,
+                         leader.astype(float)], axis=1)
+        src, dst = np.concatenate([i, self.M + k]), np.concatenate([self.M + k, i])
+
+        return Data(x=torch.tensor(x_items + x_users, dtype=torch.float),
+                    edge_index=torch.tensor(np.stack([src, dst]), dtype=torch.long),
+                    edge_attr=torch.tensor(np.concatenate([attr, attr]), dtype=torch.float),
+                    num_items=self.M, num_users=self.K, L=self.L)
+
+    def to_graph_egat(self):
+        """Graph of the original EGAT (complete item-item subgraph), kept for the old networks."""
 
         # Node features
         # Item nodes (type 0): [value, type_encoding, 0]

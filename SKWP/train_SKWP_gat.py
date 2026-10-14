@@ -1,13 +1,12 @@
+import sys
 import time
-import datetime
 
 import numpy as np
 import torch
 
-from GAT.gat_2 import EGAT2
-from SKWP.GA_SKWP import GA_SKWP
 from SKWP.SKWP_graph_instance import create_SKWP_batch, SKWPGraph
-from GAT.gat import EGAT
+from SKWP.validation_skwp import load_validation, SIZES
+from GAT.policy import TransformerPolicy
 
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
@@ -18,96 +17,80 @@ print('Experiments running on', device)
 
 METHOD = 'g'
 
-MIN_SIZE, MAX_SIZE = 20, 50
+# 'k1': single follower, 'mf': multi-follower (sizes in SKWP/validation_skwp.py)
+VARIANT = sys.argv[1] if len(sys.argv) > 1 else 'k1'
+M, K = SIZES[VARIANT]
 
-SAVE = True
-timestamp = str(datetime.datetime.now()).split('.')[0] 
-file_name = 'SKWP/NET/test_skwp_k1_' + str(MIN_SIZE) + '_' + str(MAX_SIZE) + '_' + timestamp +'.pth'
+file_name = 'SKWP/NET/skwp_policy_' + VARIANT + '.pth'
 print(file_name)
 
-M = range(MIN_SIZE, MAX_SIZE)
-K = range(MIN_SIZE, MAX_SIZE)
 SEED = 1
+# one distinct seed per training instance, away from the test seeds (0..N_RUNS-1) and the validation seeds
+TRAIN_SEED_MIN = 10_000
+torch.manual_seed(SEED)
 
-HIDDEN = 128
+HIDDEN = 64
 
-N_SAMPLES = 4
-ITERATIONS = 500
-EPISODE_PER_BATCH = 256
+N_SAMPLES = 64
+ITERATIONS = 3000
+EPISODE_PER_BATCH = 32
 
-BASELINE_ITERATIONS = 1000
-POPULATION = N_SAMPLES
+VALIDATION_EVERY = 50
+VALIDATION_SAMPLES = 128
 
-lr = 0.0005
-wd = 0.0001
-entropy_coef = 0.001
-max_norm=10.0
-agent = EGAT(7, 6, HIDDEN, 2, lr=lr, wd=wd, device=device)
+lr = 0.0003
+wd = 0.00001
+agent = TransformerPolicy(hidden_channels=HIDDEN, lr=lr, wd=wd, device=device)
 
-BEST_GAP = 0
+# fixed validation set, normalised by an offline long-GA reference
+validation = load_validation(VARIANT)
+
+
+def validate():
+    """Mean over the validation set of best sampled initial value / reference."""
+    agent.eval()
+    score = np.mean([inst.eval_sample(agent.get_distribution(inst, VALIDATION_SAMPLES), method=METHOD)[1] / ref
+                     for inst, ref in validation])
+    agent.train()
+    return score
+
+
 t = time.time()
 
-
 for iteration in range(ITERATIONS):
-    # np.random.seed(SEED)
-    instances = [SKWPGraph(np.random.choice(M), 1) for _ in range(EPISODE_PER_BATCH)]
+    instances = []
+    for i in range(EPISODE_PER_BATCH):
+        np.random.seed(TRAIN_SEED_MIN + iteration * EPISODE_PER_BATCH + i)
+        instances.append(SKWPGraph(np.random.choice(M), np.random.choice(K)))
 
     batch = create_SKWP_batch(instances, device=device)
 
-    samples, log_probs, _ = agent(batch, N_SAMPLES)
-    rewards, baselines, log_prices, randoms = [], [], [], []
-    wins, gaps = 0, []
-    rand_wins, rand_gaps, rand_ga_gaps = 0, [], []
+    samples, log_probs, mu = agent(batch, N_SAMPLES)
+
+    log_prices, rewards, groups = [], [], []
+    mu_std = []
 
     for i, inst in enumerate(instances):
-        # if i % 5 == 0:
-        #     print(iteration, i, inst)
-        mask = (batch.batch == i) * (batch.x[:, -1] == 1) # get only p controlled by the leader (i.e. x[:, -1 == 1) of the batch
-        inst_sample_tensor = samples[:, mask]
-        log_prices.append(log_probs[:, mask].flatten())
+        mask = (batch.batch == i) * (batch.x[:, -1] == 1) # get only items controlled by the leader (i.e. x[:, -1] == 1) of the batch
+        vals, _ = inst.eval_sample(samples[:, mask], method=METHOD)
+        log_prices.append(log_probs[:, mask].sum(dim=1))  # joint log-prob of each sample
+        rewards += list(vals)
+        groups += [i] * N_SAMPLES  # instance index, for the per-instance advantage
+        mu_std.append(mu[mask].std().item())
 
-        g = GA_SKWP(inst, pop_size=POPULATION, method=METHOD)
-        g.run(BASELINE_ITERATIONS)
-        baselines += [g.best_val for _ in range(inst.L * N_SAMPLES)]
-
-        # rewards.append([g_nn.best_val for _ in range(inst.L * N_SAMPLES)])
-        vals, agent_best_val = inst.eval_sample(inst_sample_tensor, method=METHOD)
-        rewards += np.repeat(vals, inst.L).tolist()
-
-        random_best_val = inst.random_baseline(N_SAMPLES, method=METHOD) + 1e-6
-        randoms += [random_best_val for _ in range(inst.L * N_SAMPLES)]
-
-        wins += g.best_val < agent_best_val
-        gaps += [agent_best_val/g.best_val if g.best_val > 0 else 0]
-        rand_wins += random_best_val < agent_best_val
-        rand_gaps += [agent_best_val/random_best_val if random_best_val > 0 else 0]
-        rand_ga_gaps += [g.best_val/random_best_val if g.best_val > 0 else 0]
-
-    if iteration > 5 and BEST_GAP < np.mean(gaps):
-        agent.best_gap = np.mean(gaps)
-        if SAVE:
-            agent.save(file_name, )
-        BEST_GAP = agent.best_gap
-        print(f"saved check point. Avg gap : {agent.best_gap: .3f}")
-
-    reward_tensor = torch.tensor(rewards, dtype=torch.float32, device=device)
-    baseline_tensor = torch.tensor(baselines, dtype=torch.float32, device=device)
-    # baseline_tensor = torch.tensor(randoms, dtype=torch.float32, device=device)
-
+    reward_tensor = torch.tensor(np.array(rewards), dtype=torch.float32, device=device)
+    group_tensor = torch.tensor(groups, device=device)
     log_prices = torch.cat(log_prices)
 
-    loss = agent.train_policy(log_prices, reward_tensor, baseline_tensor, entropy_coef=entropy_coef, max_norm=max_norm)
+    loss = agent.train_policy(log_prices, reward_tensor, group_tensor)
 
-    if iteration % 1 == 0:
-        max_agent = reward_tensor.max().item()
-        print(f"E{iteration:4d} | " 
-              f"Train time {time.time() - t:.1f} || " 
-              f"WinRate: {wins / EPISODE_PER_BATCH :.3f} | "
-              f"avg gap: {np.mean(gaps) :.3f} | "
-              f"loss: {loss :.3f}  ||  "
-              f"rand WinRate: {rand_wins / EPISODE_PER_BATCH :.3f} | "
-              f"rand avg gap: {np.mean(rand_gaps) :.3f} | "
-              f"rand avg ga rand gap: {np.mean(rand_ga_gaps) :.3f} | "
-              )
-
-agent.save('SKK/NET/test.pth')
+    if (iteration + 1) % VALIDATION_EVERY == 0:
+        score = validate()
+        if score > agent.best_val:
+            agent.best_val = score
+            agent.save(file_name)
+        print(f"E{iteration + 1:5d} | "
+              f"Train time {time.time() - t:.1f} || "
+              f"val best/ref: {score:.4f} (best {agent.best_val:.4f}) | "
+              f"loss: {loss:.3f} | "
+              f"std mu across items: {np.mean(mu_std):.3f}", flush=True)

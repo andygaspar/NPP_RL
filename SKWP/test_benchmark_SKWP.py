@@ -6,19 +6,20 @@ import pandas as pd
 from Initialisations.initialisations import init_lhc, init_sobol, init_halton, init_kronecker
 from SKWP.SKWP_graph_instance import SKWPGraph
 from SKWP.GA_SKWP import GA_SKWP
-from GAT.gat import load_agent
+import sys
+
+from GAT.policy import load_policy
 from SKWP.skwp_solver import SKWP
 
 
-print('kkkkkkkkkk****************')
-
 EXTENDED = True
-# model_name = 'test_skwp_20_50_2026-02-27 22:48:24'
-model_name = 'best_skwp'
+# 'k1': single-follower cases, 'mf': multi-follower cases
+VARIANT = sys.argv[1] if len(sys.argv) > 1 else 'k1'
+model_name = 'skwp_policy_' + VARIANT
 
 file_name = 'SKWP/NET/' + model_name + '.pth'
 
-agent = load_agent(file_name)
+agent = load_policy(file_name)
 device = agent.device
 
 BASELINE_ITERATIONS = 1000
@@ -29,7 +30,12 @@ METHOD = 'g'
 
 CASES = [(10, 10), (15, 15), (20, 20), (56, 56), (90, 90), (180, 180), (360, 360), (450, 450), (10, 360), (360, 10), (20, 450), (450, 20), (30, 720), (720, 30)]
 SINGLE_COMMODITY = [(20, 1), (56, 1), (90, 1), (180, 1), (360, 1), (450, 1), (720, 1), (900, 1)]
-CASES = SINGLE_COMMODITY + CASES
+CASES = SINGLE_COMMODITY if VARIANT == 'k1' else CASES
+
+# exact values: read from the saved results instead of solving again
+RUN_EXACT = False
+EXACT_FILE = 'results_skwp_new.csv'
+df_exact = None if RUN_EXACT else pd.read_csv(EXACT_FILE)
 
 
 SOLVER_CASES = [(10, 10), (15, 15)]
@@ -95,7 +101,11 @@ for case in CASES:
         wins += ga.best_val <= ga_nn.best_val
         gaps += [ga_nn.best_val / ga.best_val] if ga.best_val > 0 else ([-1] if ga_nn.best_val > 0 else [-2])
 
-        if case in SOLVER_CASES:
+        ex = None if RUN_EXACT else df_exact[(df_exact.M == M) & (df_exact.K == K) & (df_exact.run == run) & (df_exact.obj_exact > 0)]
+        if case in SOLVER_CASES and not RUN_EXACT and len(ex):
+            solver_time, solver_obj, solver_final_gap, solver_status = (
+                ex.iloc[0].time_exact, ex.iloc[0].obj_exact, ex.iloc[0].mip_GAP, ex.iloc[0].status)
+        elif case in SOLVER_CASES and RUN_EXACT:
             solver = SKWP(instance)
             obj, sol = solver.solve(verbose=False, time_limit=TIME_LIMIT)
             solver_time, solver_obj, solver_final_gap, solver_status = (
@@ -126,6 +136,6 @@ for case in CASES:
     # print(M, K, wins / N_RUNS, np.mean(gaps), np.mean(exact_gaps))
     # df_exact.to_csv('SKWP/Results/' + 'exact_results.csv', index=False)
 
-    df.to_csv('SKWP/Results/results_skwp_new.csv', index=False)
+    df.to_csv('SKWP/Results/results_skwp_' + VARIANT + '.csv', index=False)
 
 
