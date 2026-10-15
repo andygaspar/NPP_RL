@@ -20,7 +20,7 @@ file_name = 'NPP/NET/npp_policy_20_90.pth'
 
 # exact values: read from the saved results (Gurobi, 1800 s time limit) instead of solving again
 RUN_EXACT = False
-EXACT_FILE = 'test_npp_new.csv'
+EXACT_FILE = 'NPP/Results/test_npp_new.csv'
 df_exact = None if RUN_EXACT else pd.read_csv(EXACT_FILE)
 
 
@@ -37,7 +37,6 @@ CASES = [(20, 20), (56, 56), (90, 90), (180, 180), (360, 360), (450, 450), (20, 
 case_num = dict(zip(CASES, range(len(CASES))))
 
 N_RUNS = 30
-
 
 columns = ['run', 'commodities', 'paths',
            'obj_exact', 'obj_nn_ga', 'obj_nn_sample', 'obj_nn_mean', 'obj_ga',
@@ -117,7 +116,7 @@ for case in CASES:
         print(ga.best_val, ga_lhc.best_val, ga_sobol.best_val, ga_halton.best_val, ga_kronecker.best_val, ga_nn.best_val, solver_obj)
 
     print(paths, comm, wins / N_RUNS, np.mean(gaps), np.mean(exact_gaps))
-    df.to_csv('NPP/Results/test_npp_new.csv')
+    df.to_csv('NPP/Results/test_npp_new_net.csv')
 
 #
 # import pandas as pd
