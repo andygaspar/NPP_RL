@@ -38,7 +38,7 @@ EPISODE_PER_BATCH = 256
 BASELINE_ITERATIONS = 1000
 POPULATION = N_SAMPLES
 
-lr = 0.0005
+lr = 0.001
 wd = 0.0001
 entropy_coef = 0.001
 max_norm=10.0
@@ -49,7 +49,7 @@ t = time.time()
 
 
 for iteration in range(ITERATIONS):
-    # np.random.seed(SEED)
+    np.random.seed(SEED)
     instances = [SKWPGraph(np.random.choice(M), 1) for _ in range(EPISODE_PER_BATCH)]
 
     batch = create_SKWP_batch(instances, device=device)
@@ -109,5 +109,3 @@ for iteration in range(ITERATIONS):
               f"rand avg gap: {np.mean(rand_gaps) :.3f} | "
               f"rand avg ga rand gap: {np.mean(rand_ga_gaps) :.3f} | "
               )
-
-agent.save('SKK/NET/test.pth')
