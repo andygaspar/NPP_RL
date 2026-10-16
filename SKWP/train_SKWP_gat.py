@@ -18,7 +18,8 @@ print('Experiments running on', device)
 METHOD = 'g'
 
 # 'k1': single follower, 'mf': multi-follower (sizes in SKWP/validation_skwp.py)
-VARIANT = sys.argv[1] if len(sys.argv) > 1 else 'k1'
+# VARIANT = sys.argv[1] if len(sys.argv) > 1 else 'k1'
+VARIANT = 'mf'
 M, K = SIZES[VARIANT]
 
 file_name = 'SKWP/NET/skwp_policy_' + VARIANT + '.pth'
