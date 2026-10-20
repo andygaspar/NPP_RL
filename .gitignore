@@ -1,0 +1,9 @@
+__pycache__/
+*.py[cod]
+*.o
+*.so
+.idea/
+.vscode/
+.neptune/
+.ipynb_checkpoints/
+*.log

@@ -1,0 +1,11 @@
+# Python >= 3.10
+numpy
+scipy
+pandas
+networkx
+matplotlib
+torch
+torch_geometric
+# Gurobi is only needed for the exact baselines (pp/exact_solver.py, skwp/exact_solver.py)
+# and requires a valid licence; the paper used Gurobi 10.0.
+gurobipy
