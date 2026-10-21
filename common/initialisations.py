@@ -40,10 +40,10 @@ def _default_irrationals(d):
         return primes
     return np.sqrt(first_primes(d))
 
-# # --- verifica con l'esempio 1D del paper ---
+# # --- check against the 1D example of the paper ---
 # seq_1d = kronecker_sequence(4, 1, x0=[0.0], alpha=[(np.sqrt(5) - 1) / 2])
 # print(seq_1d.ravel())
-# # atteso: [0.618, 0.236, 0.854, 0.472] (circa)
+# # expected: [0.618, 0.236, 0.854, 0.472] (approximately)
 
 
 

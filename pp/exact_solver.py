@@ -38,7 +38,7 @@ class PPSolver:
 
 
 
-        # self.m.setParam('Method', 2) ###################testare == 2 !!!!!!!!!!!!111c
+        # self.m.setParam('Method', 2)  # TODO: test Method == 2
         self.m.modelSense = GRB.MAXIMIZE
 
         self.eps = 0

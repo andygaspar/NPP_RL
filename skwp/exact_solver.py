@@ -39,7 +39,7 @@ class SKWP:
             self.model.setParam('OutputFlag', 0)
         self.model.setParam('FeasibilityTol', 1e-9)
         self.model.setParam('IntFeasTol', 1e-9)
-        self.model.setParam('NumericFocus', 3)  # Alta precisione numerica
+        self.model.setParam('NumericFocus', 3)  # High numerical precision
         if self.inst.K >= 360 and self.inst.M >= 360:
             self.model.setParam('Threads', 4)
             self.model.setParam('SoftMemLimit', 90)
@@ -106,7 +106,7 @@ class SKWP:
                     )
 
             for j in range(self.M):
-                ##### SE CI SONO OGGETTI CON PESO SUPERIORE ALLA CAPACITA' USARE C[K] COME UPPER NON E' SUFFICENTE
+                ##### IF SOME ITEMS WEIGH MORE THAN THE CAPACITY, USING C[K] AS THE UPPER BOUND IS NOT SUFFICIENT
                 self.model.addConstr(
                     w_k[k, :, j].sum() <= w_k_in[k, j] + (1 - y[k, j]) * BigM, #self.c[k],
                     name='force w_in > w if y ' + str(k) + ' ' + str(j)
@@ -137,8 +137,8 @@ class SKWP:
                 self.model.addConstr(
                     w_leader_in[k, j] <= y[k, j] * self.c[k]
                 )
-            ##### CREA PROBLEMI, MA MI SEMBRA CHE SENZA QUESTO NON STIAMO FORZANDO LE Y AD ESSERE 0 QUANDO L'OGGETTO CORRISPONDENTE ECCEDE LA CAPACITA' (RESIDUA)
-            ##### MA SOLO AD ESSERE 1 QUANDO STA SOTTO LA CAPACITA (RESIUDA)
+            ##### THIS CAUSES PROBLEMS, BUT IT SEEMS THAT WITHOUT IT WE ARE NOT FORCING Y TO BE 0 WHEN THE CORRESPONDING ITEM EXCEEDS THE (RESIDUAL) CAPACITY
+            ##### BUT ONLY TO BE 1 WHEN IT IS BELOW THE (RESIDUAL) CAPACITY
             # self.model.addConstr(w_k_in.sum(axis=-1) <= self.c, name='cap ' + str(k))
             self.model.addConstr(w == w_k[k, :self.L].sum(axis=-1), name='w == w_k' + str(k) + ' ')
 

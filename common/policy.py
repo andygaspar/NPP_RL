@@ -141,5 +141,5 @@ def load_policy(path, device=None) -> TransformerPolicy:
     agent.optimizer.load_state_dict(net['optimizer_state_dict'])
     agent.best_val = net['best_val']
     agent.eval()  # no dropout / batch statistics at inference
-    print(f"Modello caricato da: {path}")
+    print(f"Model loaded from: {path}")
     return agent

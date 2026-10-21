@@ -53,33 +53,33 @@ class SKWP_instance:
         # max_w[max_w < min_cap_left] = min_cap_left
         # max_w[max_w > self.c.max()] = self.c.max()
         sol = np.zeros_like(w, dtype=bool)
-        # Greedy per ogni utente (istanza K)
+        # Greedy for each follower (k = 0, ..., K-1)
         for k in range(self.K):
             capacity_left = self.c[k]
             for idx in indexes[k]:
-                if w[k, idx] <= capacity_left:  # Se l'item può entrare
+                if w[k, idx] <= capacity_left:  # if the item fits
                     sol[k, idx] = True
                     capacity_left -= w[k, idx]
-                # Altrimenti salta l'item e continua col prossimo
+                # otherwise skip the item and move on to the next one
 
-        # Calcola min_cap_left su tutti gli utenti
-        w_sorted = w[sol]  # Nota: questo non funziona bene con broadcasting
-        # Meglio calcolare per ogni utente:
+        # Compute min_cap_left over all followers
+        w_sorted = w[sol]  # Note: this does not work well with broadcasting
+        # Better to compute it for each follower:
         min_cap_left = float('inf')
         for k in range(self.K):
             cap_left = self.c[k] - (w[k] * sol[k]).sum()
             min_cap_left = min(min_cap_left, cap_left)
 
-        # Calcola min_efficiency tra gli item selezionati
+        # Compute min_efficiency among the selected items
         min_efficiency = float('inf')
         for k in range(self.K):
             for idx in range(len(p[k])):
                 if sol[k, idx]:
                     min_efficiency = min(min_efficiency, efficiency[k, idx])
 
-        # Se nessun item selezionato, usa un default
+        # If no item is selected, use a default
         if min_efficiency == float('inf'):
-            min_efficiency = efficiency.max()  # o un valore di default
+            min_efficiency = efficiency.max()  # or a default value
 
         max_w = self.p[:, :self.L].max(axis=0) / min_efficiency
         max_w[max_w < min_cap_left] = min_cap_left
@@ -103,19 +103,19 @@ class SKWP_instance:
         # np.put_along_axis(sol, indexes, sol, axis=-1)
         # # print(sol, 'solution')
         # val = (w * sol)[:, :self.L].sum(axis=-1).sum(axis=-1)
-        # Inizializza soluzione con zeri
+        # Initialise the solution with zeros
         sol = np.zeros_like(w, dtype=bool)
 
-        # Per ogni utente (istanza K)
+        # For each follower (k = 0, ..., K-1)
         for k in range(self.K):
             capacity_left = self.c[k]
-            # Scorre gli item in ordine di efficienza
+            # Go through the items in order of efficiency
             for idx in indexes[k]:
-                if w[k, idx] <= capacity_left + 1e-9:  # Se l'item può entrare
+                if w[k, idx] <= capacity_left + 1e-9:  # if the item fits
                     sol[k, idx] = True
                     capacity_left -= w[k, idx]
                     capacity_left = capacity_left.round(9)
-                # Altrimenti salta l'item e continua con il prossimo
+                # otherwise skip the item and move on to the next one
         # print(sol)
         val = (w * sol)[:, :self.L].sum(axis=-1).sum(axis=-1)
         return val, sol
