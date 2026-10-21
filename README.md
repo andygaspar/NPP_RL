@@ -4,20 +4,25 @@ Code accompanying the paper
 
 > A. Gasparin, F. J. Camerota Verdù, L. Castelli.
 > *Learning to Initialise Genetic Algorithms in Bilevel Optimisation: A Reinforcement Learning Approach.*
-> Submitted to *Computers & Operations Research*.
 
-A Graph Transformer Network (GTN) is trained with REINFORCE to produce, for a given instance, a distribution over the
-leader's continuous decision variables. Samples from this distribution form the initial population of a genetic
-algorithm (GA) that solves the bilevel problem. The policies are trained on small instances and then used, without
-retraining, on instances many times larger.
+This repository implements a reinforcement learning approach to the initialisation of genetic algorithms (GAs) for
+bilevel optimisation problems with continuous leader variables. Rather than sampling the initial population at random,
+a learned policy defines an instance-conditioned distribution over the leader's decision variables, from which the
+initial population of the GA is drawn. Since the GA operators are left unchanged, the learned initialisation can be
+combined with existing GA implementations.
 
-Two bilevel problems are studied:
+Two bilevel problems are considered:
 
-- **Path Pricing Problem (PP)**: the leader sets tolls on a set of paths and the followers (commodities) choose
-  the cheapest path. In the code this is called `pp` (some classes and file names still use the older name NPP,
-  for *network pricing problem*).
-- **Stackelberg Knapsack Weight Problem (SKWP)**: the leader sets the weights of its items and each follower
-  packs its knapsack greedily. Both the single-follower ($K=1$) and the multi-follower ($K>1$) variants are covered.
+- **Path Pricing Problem (PP)**: the leader sets tolls on a set of paths, and each follower (commodity) selects its
+  minimum-cost path. In the code, this problem is referred to as `pp`; some classes and file names retain the earlier
+  name NPP (*network pricing problem*).
+- **Stackelberg Knapsack Weight Problem (SKWP)**: the leader sets the weights of its items, and each follower fills its
+  knapsack greedily. Both the single-follower ($K=1$) and multi-follower ($K>1$) variants are considered.
+
+For each problem, a Graph Transformer Network (GTN) maps a graph representation of the instance to a distribution over
+the leader's continuous variables. The network is trained with REINFORCE, using the quality of the solutions in the
+sampled population as the reward signal. Policies are trained on small instances and applied, without retraining, to
+instances many times larger than those seen during training.
 
 ## Repository structure
 
@@ -120,12 +125,11 @@ The experiments were run on an Intel Xeon W7-2495X CPU with 128 GB RAM and an NV
 ## Citation
 
 ```bibtex
-@article{gasparin2026learning,
+@unpublished{gasparin2026learning,
   title   = {Learning to Initialise Genetic Algorithms in Bilevel Optimisation: A Reinforcement Learning Approach},
   author  = {Gasparin, Andrea and Camerota Verd{\`u}, Federico Julian and Castelli, Lorenzo},
-  journal = {Computers \& Operations Research},
   year    = {2026},
-  note    = {Submitted}
+  note    = {Manuscript}
 }
 ```
 
