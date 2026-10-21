@@ -8,7 +8,7 @@ from common.initialisations import init_lhc, init_sobol, init_halton, init_krone
 from pp.graph_instance import GTNInstance
 from pp.genetic_solver import Genetic
 from common.policy import load_policy
-from pp.exact_solver import NPPSolver
+from pp.exact_solver import PPSolver
 import os
 
 # os.system('chmod +x install.sh')
@@ -16,7 +16,7 @@ import os
 
 # time.sleep(1)
 
-file_name = 'models/npp_policy.pth'
+file_name = 'models/pp_policy.pth'
 
 # exact values: read from the saved results (Gurobi, 1800 s time limit) instead of solving again
 RUN_EXACT = False
@@ -90,7 +90,7 @@ for case in CASES:
         wins += ga.best_val <= ga_nn.best_val
         gaps += [ga_nn.best_val / ga.best_val] if ga.best_val > 0 else ([-1] if ga_nn.best_val > 0 else [-2])
         if RUN_EXACT:
-            solver = NPPSolver(instance, time_limit=TIME_LIMIT, verbose=False)
+            solver = PPSolver(instance, time_limit=TIME_LIMIT, verbose=False)
             solver.solve()
             solver_obj, solver_gap, solver_status, solver_time = solver.obj, solver.final_gap, solver.m.status, solver.time
         else:

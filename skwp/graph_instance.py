@@ -17,7 +17,7 @@ class SKWPGraph(SKWP_instance):
         Bipartite item <-> follower graph, no item-item edges.
         For follower k, e_k is the efficiency of the first follower item that does not fit in the greedy knapsack
         filled with follower items only: a leader item i keeps being chosen by k roughly while
-        p[k, i] / w_i >= e_k, i.e. up to the threshold weight p[k, i] / e_k (the analogue of the NPP breakpoint).
+        p[k, i] / w_i >= e_k, i.e. up to the threshold weight p[k, i] / e_k (the analogue of the PP breakpoint).
         Item nodes: [mean profit, mean weight (follower items), max_w (leader items), 0, 0, follower item, leader item]
         Follower nodes: [capacity / sum of the leader max_w, 0, 0, capacity, e_k, 0, 0]
         Edge features, leader item: [p[k, i], log((p[k, i] / max_w_i) / e_k), threshold / max_w_i, 1]

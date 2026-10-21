@@ -14,8 +14,7 @@ combined with existing GA implementations.
 Two bilevel problems are considered:
 
 - **Path Pricing Problem (PP)**: the leader sets tolls on a set of paths, and each follower (commodity) selects its
-  minimum-cost path. In the code, this problem is referred to as `pp`; some classes and file names retain the earlier
-  name NPP (*network pricing problem*).
+  minimum-cost path. In the code, this problem is referred to as `pp`.
 - **Stackelberg Knapsack Weight Problem (SKWP)**: the leader sets the weights of its items, and each follower fills its
   knapsack greedily. Both the single-follower ($K=1$) and multi-follower ($K>1$) variants are considered.
 
@@ -83,7 +82,7 @@ population size, iterations, variant, ...) are constants at the top of each scri
 
 ```bash
 python -m pp.validation    # once: reference values of the validation set -> results/validation_pp.csv
-python -m pp.train         # trains the policy -> models/npp_policy.pth
+python -m pp.train         # trains the policy -> models/pp_policy.pth
 python -m pp.benchmark     # test experiments -> results/pp_results.csv
 ```
 

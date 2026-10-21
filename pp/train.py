@@ -16,7 +16,7 @@ print('Experiments running on', device)
 MIN_SIZE, MAX_SIZE = 20, 90
 
 
-file_name = 'models/npp_policy.pth'
+file_name = 'models/pp_policy.pth'
 
 N_COMM = range(MIN_SIZE, MAX_SIZE)
 N_PATHS = range(MIN_SIZE, MAX_SIZE)

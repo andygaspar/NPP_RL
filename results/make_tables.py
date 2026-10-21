@@ -6,7 +6,7 @@ import scipy
 FILES = [
     ('results/pp_results.csv', ['commodities', 'paths'], ['C', 'P'],
      'Performance comparison between Gurobi, GTN+GA, and GA.', 'tab:results',
-     'Comparison of different GA initialisations on PP', 'tab:ga_npp'),
+     'Comparison of different GA initialisations on PP', 'tab:ga_pp'),
     ('results/skwp_k1_results.csv', ['M', 'K'], ['M', 'K'],
      'Results on SKWP with $K = 1$, comparison between GTN + GA and plain GA.', 'tab:skwp_k1',
      'Comparison of different GA initialisations on SKWP with $K = 1$', 'tab:ga_skwp_k1'),

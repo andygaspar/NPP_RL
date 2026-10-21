@@ -17,7 +17,7 @@ def stop(model, where):
             model.terminate()
 
 
-class NPPSolver:
+class PPSolver:
 
     def __init__(self, instance: Instance, time_limit=None, min_sol_num=None, verbose=False, binary=True, tol=1e-9):
 
