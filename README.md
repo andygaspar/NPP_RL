@@ -63,8 +63,8 @@ instances many times larger than those seen during training.
 The code was developed on Linux with Python 3 and `g++` with OpenMP support.
 
 ```bash
-git clone https://github.com/OR-UniTS/GA_RL.git
-cd GA_RL
+git clone https://github.com/OR-UniTS/rl-ga-init-bilevel.git
+cd rl-ga-init-bilevel
 pip install -r requirements.txt   # install the torch / torch_geometric builds that match your CUDA version
 ./build.sh                        # builds pp/ga_cpp/ga_bridge.so and skwp/knapsack_cpp/knap_bridge.so
 ```
