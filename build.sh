@@ -1,3 +1,6 @@
+#!/usr/bin/env bash
+set -e
+
 g++ -c -Ofast -fopenmp -fPIC pp/ga_cpp/ga_bridge.cc -o pp/ga_cpp/ga_bridge.o
 g++ -shared -fopenmp -Wl,-soname,ga_bridge.so -o pp/ga_cpp/ga_bridge.so pp/ga_cpp/ga_bridge.o
 rm -f pp/ga_cpp/ga_bridge.o
